@@ -1,0 +1,83 @@
+name: Release JiMu Desktop
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: JiMu Desktop version without the v prefix
+        required: true
+        default: 0.1.1
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  gates:
+    name: Revalidate JiMu gates
+    uses: ./.github/workflows/jimu.yml
+
+  release:
+    name: macOS Apple Silicon
+    needs: gates
+    if: github.ref == 'refs/heads/main'
+    runs-on: macos-14
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ inputs.version }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: 11.7.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Verify release source
+        run: |
+          set -euo pipefail
+          git fetch origin main --depth=1
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+          package_version=$(node -p "require('./apps/jimu-desktop/package.json').version")
+          test "$package_version" = "$VERSION"
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            echo "::error::Release v$VERSION already exists."
+            exit 1
+          fi
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build shared libraries
+        run: pnpm run build:lib
+      - name: Build macOS Apple Silicon DMG
+        run: pnpm --filter @i-yolo/jimu-desktop dist:mac
+      - name: Smoke-test packaged application
+        run: pnpm --filter @i-yolo/jimu-desktop test:packaged
+      - name: Audit unpacked application
+        run: node scripts/jimu-release-audit.mjs --root apps/jimu-desktop/release/mac-arm64/JiMu.app/Contents/Resources
+      - name: Audit mounted DMG
+        run: |
+          set -euo pipefail
+          dmg="apps/jimu-desktop/release/JiMu-$VERSION-macOS-arm64.dmg"
+          mount="$RUNNER_TEMP/jimu-dmg"
+          mkdir -p "$mount"
+          hdiutil attach -nobrowse -readonly -mountpoint "$mount" "$dmg"
+          trap 'hdiutil detach "$mount"' EXIT
+          node scripts/jimu-release-audit.mjs --root "$mount/JiMu.app/Contents/Resources"
+      - name: Generate checksum
+        run: |
+          cd apps/jimu-desktop/release
+          shasum -a 256 "JiMu-$VERSION-macOS-arm64.dmg" > "JiMu-$VERSION-macOS-arm64.dmg.sha256"
+      - name: Publish GitHub Release
+        run: |
+          release_dir="apps/jimu-desktop/release"
+          gh release create "v$VERSION" \
+            "$release_dir/JiMu-$VERSION-macOS-arm64.dmg" \
+            "$release_dir/JiMu-$VERSION-macOS-arm64.dmg.sha256" \
+            --target "$GITHUB_SHA" \
+            --title "JiMu Harness v$VERSION · macOS Apple Silicon" \
+            --notes "JiMu Harness for macOS Apple Silicon. The DMG and checksum were built from $GITHUB_SHA after the JiMu security, upstream compatibility, and desktop gates passed."

@@ -1,46 +1,104 @@
 name: JiMu downstream gates
 
 on:
+  workflow_call:
   pull_request:
-    paths:
-      - "apps/jimu-*/**"
-      - "docs/jimu/**"
-      - "config/jimu-migration-allowlist.json"
-      - "scripts/jimu-audit.mjs"
-      - "scripts/jimu-release-audit.mjs"
-      - "README*"
-      - "TRADEMARKS.md"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
   push:
     branches: [main]
+
+concurrency:
+  group: jimu-gates-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
 
+env:
+  DSH_TELEMETRY_DISABLED: '1'
+
 jobs:
-  verify:
-    runs-on: macos-14
+  security:
+    name: security
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
-      - uses: pnpm/action-setup@v4
+      - name: Fetch the public upstream baseline
+        run: |
+          git remote add upstream https://github.com/deepseek-ai/deepseek-harness.git || true
+          git fetch upstream master --tags
+      - name: Audit the JiMu downstream diff
+        run: node scripts/jimu-audit.mjs --base upstream/master
+      - name: Install Gitleaks 8.30.1
+        env:
+          GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/gitleaks.tar.gz"
+          curl --fail --location --silent --show-error \
+            https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz \
+            --output "$archive"
+          printf '%s  %s\n' "$GITLEAKS_SHA256" "$archive" | sha256sum --check --status
+          tar -xzf "$archive" -C "$RUNNER_TEMP" gitleaks
+          printf '%s\n' "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      - name: Scan the source tree
+        run: gitleaks dir . --config .gitleaks.toml --redact --no-banner --exit-code 1
+      - name: Scan JiMu commits
+        run: gitleaks git . --config .gitleaks.toml --redact --no-banner --log-opts="upstream/master..HEAD" --exit-code 1
+      - name: Prove new credential fixtures are rejected
+        run: |
+          set -euo pipefail
+          fixture="$RUNNER_TEMP/jimu-gitleaks-negative-control"
+          mkdir -p "$fixture"
+          printf 'api_key = "%s%s"\n' '9zQp7LmK2vXc8NrT' '4WsY6HdJ1FaB3GeU5CiO0PkR' > "$fixture/credential.txt"
+          if gitleaks dir "$fixture" --config .gitleaks.toml --redact --no-banner --exit-code 1; then
+            echo "::error::Gitleaks accepted the negative-control credential fixture."
+            exit 1
+          fi
+
+  upstream-compat:
+    name: upstream-compat
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
           version: 11.7.0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 22.19.0
+          node-version: 24
           cache: pnpm
-      - run: git remote add upstream https://github.com/deepseek-ai/deepseek-harness.git || true
-      - run: git fetch upstream master --tags
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm run build:lib
-      - run: pnpm --filter @i-yolo/jimu-ui-preview test
-      - run: pnpm --filter @i-yolo/jimu-desktop test
-      - run: pnpm --filter @i-yolo/jimu-desktop test:security
-      - run: pnpm --filter @i-yolo/jimu-desktop build
-      - run: node scripts/jimu-audit.mjs --base upstream/master
-      - run: brew install gitleaks
-      - run: gitleaks dir . --redact --no-banner --exit-code 1
-      - run: gitleaks git . --redact --no-banner --log-opts="upstream/master..HEAD" --exit-code 1
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build shared libraries
+        run: pnpm run build:lib
+      - name: Typecheck
+        run: pnpm run typecheck:contracts-ready
+      - name: Lint
+        run: pnpm run lint:contracts-ready
+      - name: Run core unit tests
+        run: pnpm run test
+
+  desktop:
+    name: desktop
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: 11.7.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build shared libraries
+        run: pnpm run build:lib
+      - name: Verify the locked Knowledge template
+        run: pnpm --filter @i-yolo/jimu-desktop prepare:knowledge-template:release
+      - name: Run JiMu tests
+        run: pnpm run jimu:test
+      - name: Build JiMu Desktop
+        run: pnpm --filter @i-yolo/jimu-desktop build

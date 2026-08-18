@@ -1,41 +1,57 @@
 version: 2
 
 updates:
-  - package-ecosystem: "npm"
-    directory: "/"
+  - package-ecosystem: npm
+    directory: /
     exclude-paths:
-      # Vendored Cordis sources follow vendor/README.md instead of registry updates.
-      - "vendor/**"
+      - vendor/**
     schedule:
-      interval: "cron"
-      cronjob: "0 4 * * *"
-      timezone: "Asia/Shanghai"
+      interval: monthly
+      time: '04:00'
+      timezone: Asia/Shanghai
     cooldown:
       default-days: 30
+    open-pull-requests-limit: 3
+    groups:
+      npm-non-major:
+        update-types:
+          - minor
+          - patch
     labels:
-      - "kind/dependency"
-      - "area/infra"
+      - kind/dependency
+      - area/infra
 
-  - package-ecosystem: "uv"
-    directory: "/python/sdk"
+  - package-ecosystem: uv
+    directory: /python/sdk
     schedule:
-      interval: "cron"
-      cronjob: "0 4 * * *"
-      timezone: "Asia/Shanghai"
+      interval: monthly
+      time: '04:00'
+      timezone: Asia/Shanghai
     cooldown:
       default-days: 30
+    open-pull-requests-limit: 3
+    groups:
+      uv-non-major:
+        update-types:
+          - minor
+          - patch
     labels:
-      - "kind/dependency"
-      - "area/infra"
+      - kind/dependency
+      - area/infra
 
-  - package-ecosystem: "github-actions"
-    directory: "/"
+  - package-ecosystem: github-actions
+    directory: /
     schedule:
-      interval: "cron"
-      cronjob: "0 4 * * *"
-      timezone: "Asia/Shanghai"
+      interval: monthly
+      time: '04:00'
+      timezone: Asia/Shanghai
     cooldown:
       default-days: 30
+    open-pull-requests-limit: 3
+    groups:
+      github-actions:
+        patterns:
+          - '*'
     labels:
-      - "kind/dependency"
-      - "area/infra"
+      - kind/dependency
+      - area/infra
