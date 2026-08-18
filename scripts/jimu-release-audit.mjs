@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { lstat, readFile, readdir, realpath } from "node:fs/promises";
 import path from "node:path";
+import { KNOWLEDGE_STANDARD_DIRECTORIES } from "../apps/jimu-ui-preview/shared/knowledge-schema.mjs";
 
 const args = process.argv.slice(2);
 
@@ -45,6 +46,23 @@ async function listFiles(directory, relative = "") {
 }
 
 const files = (await listFiles(root)).sort();
+const knowledgeManifestSuffix = "jimu-knowledge-template/jimu-knowledge.json";
+const knowledgeManifests = files.filter(file => file === knowledgeManifestSuffix || file.endsWith(`/${knowledgeManifestSuffix}`));
+if (knowledgeManifests.length !== 1) {
+  flag("knowledge-template-manifest", knowledgeManifests.length === 0 ? "<missing>" : "<multiple>");
+} else {
+  const templateRelative = path.posix.dirname(knowledgeManifests[0]);
+  const templateRoot = path.join(root, ...templateRelative.split("/"));
+  for (const directory of KNOWLEDGE_STANDARD_DIRECTORIES) {
+    const relative = path.posix.join(templateRelative, directory);
+    try {
+      const info = await lstat(path.join(templateRoot, directory));
+      if (!info.isDirectory() || info.isSymbolicLink()) flag("knowledge-template-directory", relative);
+    } catch {
+      flag("knowledge-template-directory", relative);
+    }
+  }
+}
 const privateRootPattern = new RegExp(["AI", "Second", "Brain", "Lite"].join("-"), "iu");
 const everywhereRules = [
   ["private-user-path", new RegExp(["/", "Users", "/", "sh", "ike", "/"].join(""), "u")],

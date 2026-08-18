@@ -49,7 +49,7 @@ pnpm --filter @i-yolo/jimu-ui-preview dev
 | --- | --- | --- |
 | 0.1.x | 1 | 1.0.x |
 
-没有 Manifest 但具备完整标准目录的知识库会以 `legacy-schema-1` 兼容模式加载且不被写入。损坏或版本过高的 Manifest 会被拒绝，并保留当前可用知识库。
+没有 Manifest 但具备完整标准目录的知识库会以 `legacy-schema-1` 兼容模式加载且不被写入。`assets` 可以是解析后仍位于知识库根目录内的目录符号链接；指向外部、已经失效或指向文件的链接会被拒绝，内容分类目录仍须为真实目录。损坏或版本过高的 Manifest 会被拒绝，并保留当前可用知识库。
 
 ## DeepSeek Harness 上游
 

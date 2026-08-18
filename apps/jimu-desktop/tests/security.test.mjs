@@ -1,12 +1,19 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
+
+import { KNOWLEDGE_STANDARD_DIRECTORIES } from "../../jimu-ui-preview/shared/knowledge-schema.mjs";
+import { ensureKnowledgeTemplateDirectories } from "../scripts/after-pack.mjs";
 
 const desktopRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = path.resolve(desktopRoot, "../..");
+const run = promisify(execFile);
 
 test("desktop shell keeps the approved macOS and Electron security posture", async () => {
   const [html, main, preload, factoryService, manifest, overlay, policy, pluginManager, styles] = await Promise.all([
@@ -77,4 +84,27 @@ test("desktop shell keeps the approved macOS and Electron security posture", asy
 test("the approved JiMu icon source remains byte-for-byte unchanged", async () => {
   const source = await readFile(path.join(repoRoot, "apps/jimu-ui-preview/public/assets/jimu-icon.png"));
   assert.equal(createHash("sha256").update(source).digest("hex"), "e73dce26b35b4c8bf2fea5e3dc38fd6a4356ed13958449338277b5f0aba906f1");
+});
+
+test("afterPack restores empty Knowledge directories and the release audit requires them", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "jimu-packaged-template-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const templateRoot = path.join(root, "jimu-knowledge-template");
+  await mkdir(templateRoot, { recursive: true });
+  await writeFile(path.join(templateRoot, "jimu-knowledge.json"), "{}\n");
+
+  await assert.rejects(
+    run(process.execPath, [path.join(repoRoot, "scripts/jimu-release-audit.mjs"), "--root", root]),
+    error => error?.stdout?.includes("knowledge-template-directory:"),
+  );
+
+  await ensureKnowledgeTemplateDirectories(root);
+  for (const directory of KNOWLEDGE_STANDARD_DIRECTORIES) {
+    const info = await lstat(path.join(templateRoot, directory));
+    assert.equal(info.isDirectory(), true);
+    assert.equal(info.isSymbolicLink(), false);
+  }
+
+  const audit = await run(process.execPath, [path.join(repoRoot, "scripts/jimu-release-audit.mjs"), "--root", root]);
+  assert.match(audit.stdout, /0 failed rules/);
 });

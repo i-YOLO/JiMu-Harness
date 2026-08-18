@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -71,6 +71,45 @@ test("root inspection rejects malformed, future and incomplete knowledge roots",
   const incomplete = await mkdtemp(path.join(os.tmpdir(), "jimu-incomplete-fixture-"));
   t.after(() => rm(incomplete, { recursive: true, force: true }));
   assert.equal((await inspectKnowledgeRoot(incomplete)).phase, "incompatible");
+});
+
+test("root inspection accepts an assets link contained inside the knowledge root", async (t) => {
+  const root = await fixture(t);
+  const target = path.join(root, "08-自媒体工厂", "03-素材库", "01-图片与配图", "知识库内容素材");
+  await mkdir(target, { recursive: true });
+  await rm(path.join(root, "assets"), { recursive: true });
+  await symlink(path.relative(root, target), path.join(root, "assets"));
+
+  const inspection = await inspectKnowledgeRoot(root);
+  assert.equal(inspection.phase, "ready");
+  assert.equal(inspection.compatibility, "legacy-schema-1");
+});
+
+test("root inspection rejects escaping, dangling and non-directory standard-directory links", async (t) => {
+  const escapingRoot = await fixture(t);
+  const external = await mkdtemp(path.join(os.tmpdir(), "jimu-schema-external-"));
+  t.after(() => rm(external, { recursive: true, force: true }));
+  await rm(path.join(escapingRoot, "assets"), { recursive: true });
+  await symlink(external, path.join(escapingRoot, "assets"));
+  assert.match((await inspectKnowledgeRoot(escapingRoot)).error, /不能指向知识库外部：assets/);
+
+  const danglingRoot = await fixture(t);
+  await rm(path.join(danglingRoot, "assets"), { recursive: true });
+  await symlink("missing-assets", path.join(danglingRoot, "assets"));
+  assert.match((await inspectKnowledgeRoot(danglingRoot)).error, /链接已失效：assets/);
+
+  const fileRoot = await fixture(t);
+  await writeFile(path.join(fileRoot, "asset-file"), "fixture");
+  await rm(path.join(fileRoot, "assets"), { recursive: true });
+  await symlink("asset-file", path.join(fileRoot, "assets"));
+  assert.match((await inspectKnowledgeRoot(fileRoot)).error, /链接目标不是目录：assets/);
+
+  const contentRoot = await fixture(t);
+  const contentTarget = path.join(contentRoot, "03-Knowledge", "linked-inbox");
+  await mkdir(contentTarget, { recursive: true });
+  await rm(path.join(contentRoot, "01-Inbox"), { recursive: true });
+  await symlink(path.relative(contentRoot, contentTarget), path.join(contentRoot, "01-Inbox"));
+  assert.match((await inspectKnowledgeRoot(contentRoot)).error, /内容标准目录不允许使用符号链接：01-Inbox/);
 });
 
 test("production renderer sources contain no static user-data fallbacks", async () => {

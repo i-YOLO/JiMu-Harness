@@ -69,6 +69,34 @@ function isMissingFile(error) {
   return error && typeof error === "object" && error.code === "ENOENT";
 }
 
+async function inspectStandardDirectory(root, directory) {
+  const candidate = path.join(root, directory);
+  let info;
+  try {
+    info = await lstat(candidate);
+  } catch (error) {
+    if (isMissingFile(error)) return `知识库缺少标准目录：${directory}`;
+    throw error;
+  }
+
+  if (info.isDirectory()) return undefined;
+  if (!info.isSymbolicLink()) return `知识库标准路径不是目录：${directory}`;
+  if (directory !== "assets") return `知识库内容标准目录不允许使用符号链接：${directory}`;
+
+  let resolved;
+  try {
+    resolved = await realpath(candidate);
+  } catch (error) {
+    if (isMissingFile(error)) return `知识库标准目录链接已失效：${directory}`;
+    throw error;
+  }
+  if (!isInside(root, resolved)) return `知识库标准目录不能指向知识库外部：${directory}`;
+
+  const targetInfo = await stat(resolved);
+  if (!targetInfo.isDirectory()) return `知识库标准目录链接目标不是目录：${directory}`;
+  return undefined;
+}
+
 export async function inspectKnowledgeRoot(requestedRoot) {
   if (typeof requestedRoot !== "string" || !requestedRoot.trim()) {
     return { phase: "unconfigured", compatibility: undefined, manifest: undefined };
@@ -83,10 +111,9 @@ export async function inspectKnowledgeRoot(requestedRoot) {
 
   for (const directory of KNOWLEDGE_STANDARD_DIRECTORIES) {
     try {
-      const info = await lstat(path.join(root, directory));
-      if (!info.isDirectory() || info.isSymbolicLink()) return { phase: "incompatible", root, error: `知识库缺少标准目录：${directory}` };
+      const error = await inspectStandardDirectory(root, directory);
+      if (error) return { phase: "incompatible", root, error };
     } catch (error) {
-      if (isMissingFile(error)) return { phase: "incompatible", root, error: `知识库缺少标准目录：${directory}` };
       return { phase: "error", root, error: error instanceof Error ? error.message : String(error) };
     }
   }

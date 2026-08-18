@@ -49,7 +49,7 @@ Official release builds never accept an unlocked local template. They download t
 | --- | --- | --- |
 | 0.1.x | 1 | 1.0.x |
 
-Roots without a manifest but containing every standard directory are opened as read-only-compatible `legacy-schema-1`. Invalid or future manifests are rejected without replacing the active root.
+Roots without a manifest but containing every standard directory are opened as read-only-compatible `legacy-schema-1`. `assets` may be a symlink when its resolved target remains a directory inside the knowledge root; escaping, dangling, and non-directory links are rejected, while content-category paths must remain real directories. Invalid or future manifests are rejected without replacing the active root.
 
 ## Upstream DeepSeek Harness
 
