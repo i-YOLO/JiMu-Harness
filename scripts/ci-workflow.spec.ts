@@ -5,6 +5,17 @@ import { describe, expect, it } from 'vitest'
 
 const root = resolve(import.meta.dirname, '..')
 const runnerPrivatePnpmDestination = '${{ runner.temp }}/setup-pnpm'
+const officialRepositoryGuard = "github.repository == 'deepseek-harness/deepseek-harness'"
+
+function guarded(condition: string): string {
+  return `${officialRepositoryGuard} && ${condition}`
+}
+
+function withoutOfficialRepositoryGuard(condition: string): string {
+  const prefix = `${officialRepositoryGuard} && `
+  if (!condition.startsWith(prefix)) throw new TypeError(`upstream workflow job lacks the official repository guard: ${condition}`)
+  return condition.slice(prefix.length)
+}
 
 describe('CI workflow', () => {
   it('isolates every pnpm action setup destination per runner', () => {
@@ -59,7 +70,7 @@ describe('CI workflow', () => {
     // Required PR job: Wine on ubuntu-latest, runs wine-windows-gates.sh.
     expect(windows['runs-on']).toBe('ubuntu-latest')
     expect(windows.name).toBe('windows node 24 / wine blocking')
-    expect(windows.if).toBe("github.event_name == 'pull_request'")
+    expect(windows.if).toBe(guarded("github.event_name == 'pull_request'"))
     expect(commandSteps.some(step => step.run.includes('wine-windows-gates.sh'))).toBe(true)
 
     // windows-native: non-blocking native job with failover, runs windows-complete.
@@ -71,18 +82,18 @@ describe('CI workflow', () => {
     expect(windowsNative['runs-on']).toContain('dsh-win-ci')
     expect(windowsNative['runs-on']).toContain('dsh-windows-2025-16core')
     expect(windowsNative.name).toBe('windows node 24 / native complete')
-    expect(windowsNative.if).toBe("github.event_name == 'pull_request'")
+    expect(windowsNative.if).toBe(guarded("github.event_name == 'pull_request'"))
     const nativeCommandSteps = (windowsNative.steps as unknown[]).filter((step): step is Record<string, unknown> & { run: string } => (
       isRecord(step) && typeof step.run === 'string'
     ))
     expect(nativeCommandSteps.map(step => step.run)).toContain('pnpm run check:ci:windows-complete')
 
     // wine-apt-cache: master-only, seeds the Wine apt cache.
-    expect(wineAptCache.if).toBe("github.event_name == 'push' && github.ref == 'refs/heads/master'")
+    expect(wineAptCache.if).toBe(guarded("github.event_name == 'push' && github.ref == 'refs/heads/master'"))
     expect(wineAptCache['runs-on']).toBe('ubuntu-latest')
 
     // serial-windows: master-only standby, self-hosted, non-blocking.
-    expect(serialWindows.if).toBe("github.event_name == 'push' && github.ref == 'refs/heads/master'")
+    expect(serialWindows.if).toBe(guarded("github.event_name == 'push' && github.ref == 'refs/heads/master'"))
     expect(serialWindows['runs-on']).toEqual(['self-hosted', 'dsh-win-ci', 'windows'])
     expect(serialWindows.name).toBe('serial / windows (self-hosted standby)')
 
@@ -129,7 +140,7 @@ describe('CI workflow', () => {
       if (!isRecord(job)) throw new TypeError(`${name} must be defined`)
       expect(job.concurrency).toBeUndefined()
       // Both stay master-push-only; that is what makes the push carve-out safe.
-      expect(job.if).toBe("github.event_name == 'push' && github.ref == 'refs/heads/master'")
+      expect(job.if).toBe(guarded("github.event_name == 'push' && github.ref == 'refs/heads/master'"))
     }
 
     // What bounds the cost of exempting push: a master push may only carry the
@@ -149,10 +160,10 @@ describe('CI workflow', () => {
     const pushReachable = Object.entries(workflow.jobs)
       .filter(([, job]) => {
         if (!isRecord(job)) return false
-        if (job.if === undefined) return true // unconditional: runs on every event
-        if (job.if === false) return false // `if: false` parses as a boolean
         if (typeof job.if !== 'string') return true // unrecognized shape: surface it
-        return !NOT_PUSH_REACHABLE.has(job.if.trim())
+        const condition = withoutOfficialRepositoryGuard(job.if.trim())
+        if (condition === 'false') return false
+        return !NOT_PUSH_REACHABLE.has(condition)
       })
       .map(([name]) => name)
       .sort()
@@ -189,7 +200,7 @@ describe('CI workflow', () => {
     }
 
     expect(pythonRuntime).toMatchObject({
-      if: "github.event_name == 'pull_request'",
+      if: guarded("github.event_name == 'pull_request'"),
       name: 'python runtime / release-shaped Linux x64',
       uses: './.github/workflows/build-exe-for-python-sdk.yml',
       with: {
@@ -257,7 +268,7 @@ describe('Python release workflows', () => {
     expect(dispatch.inputs.publish).toMatchObject({ type: 'boolean', default: false })
     expect(pullRequest).toEqual({ types: ['labeled'] })
     expect(build).toMatchObject({
-      if: "github.event_name == 'workflow_dispatch' || github.event.label.name == 'python-release-dry-run'",
+      if: guarded("(github.event_name == 'workflow_dispatch' || github.event.label.name == 'python-release-dry-run')"),
       uses: './.github/workflows/build-exe-for-python-sdk.yml',
       with: {
         targets: 'node24-linux-x64,node24-linux-arm64,node24-macos-arm64',
@@ -384,7 +395,7 @@ describe('Issue lifecycle workflow', () => {
     expect(lifecyclePullRequest.types).toContain('review_requested')
     expect(lifecycleReview.types).toEqual(['submitted'])
     expect(lifecycleJob.if).toBe(
-      "${{ github.event_name != 'pull_request_review' || (github.event.action == 'submitted' && github.event.review.state == 'changes_requested') }}",
+      "${{ github.repository == 'deepseek-harness/deepseek-harness' && (github.event_name != 'pull_request_review' || (github.event.action == 'submitted' && github.event.review.state == 'changes_requested')) }}",
     )
     expect(policyPullRequest.types).toContain('ready_for_review')
   })

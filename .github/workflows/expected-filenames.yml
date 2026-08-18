@@ -17,6 +17,7 @@ env:
 
 jobs:
   expected-filenames:
+    if: github.repository == 'deepseek-harness/deepseek-harness'
     name: no golden filenames
     runs-on: ubuntu-latest
     steps:
