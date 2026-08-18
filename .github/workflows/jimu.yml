@@ -3,10 +3,11 @@ name: JiMu downstream gates
 on:
   pull_request:
     paths:
-      - "apps/jimu-**"
+      - "apps/jimu-*/**"
       - "docs/jimu/**"
       - "config/jimu-migration-allowlist.json"
       - "scripts/jimu-audit.mjs"
+      - "scripts/jimu-release-audit.mjs"
       - "README*"
       - "TRADEMARKS.md"
       - "pnpm-lock.yaml"

@@ -33,12 +33,31 @@ export const KNOWLEDGE_STANDARD_DIRECTORIES = Object.freeze([
   "assets",
 ]);
 
+function parseVersion(value) {
+  if (typeof value !== "string") return null;
+  const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(value);
+  return match ? match.slice(1).map(Number) : null;
+}
+
+function compareVersion(left, right) {
+  for (let index = 0; index < 3; index += 1) {
+    if (left[index] !== right[index]) return left[index] - right[index];
+  }
+  return 0;
+}
+
 export function validateKnowledgeManifest(value) {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return { ok: false, error: "知识库 Manifest 不是对象。" };
   if (!Number.isInteger(value.schemaVersion)) return { ok: false, error: "知识库 Manifest 缺少 schemaVersion。" };
   if (value.schemaVersion > JIMU_KNOWLEDGE_SCHEMA_VERSION) return { ok: false, error: "知识库版本高于当前 JiMu 支持范围。", futureSchema: true };
   if (value.schemaVersion !== JIMU_KNOWLEDGE_SCHEMA_VERSION) return { ok: false, error: "知识库 schemaVersion 不受支持。" };
-  if (typeof value.templateVersion !== "string" || !value.templateVersion) return { ok: false, error: "知识库 Manifest 缺少 templateVersion。" };
+  if (!parseVersion(value.templateVersion)) return { ok: false, error: "知识库 Manifest 的 templateVersion 无效。" };
+  if (typeof value.name !== "string" || !value.name.trim()) return { ok: false, error: "知识库 Manifest 缺少名称。" };
+  const minimumHarnessVersion = parseVersion(value.minimumHarnessVersion);
+  const currentHarnessVersion = parseVersion(JIMU_MINIMUM_HARNESS_VERSION);
+  if (!minimumHarnessVersion || !currentHarnessVersion) return { ok: false, error: "知识库 Manifest 的 minimumHarnessVersion 无效。" };
+  if (compareVersion(minimumHarnessVersion, currentHarnessVersion) > 0) return { ok: false, error: "知识库需要更高版本的 JiMu Harness。", futureHarness: true };
+  if (value.repositoryUrl !== JIMU_KNOWLEDGE_REPOSITORY_URL) return { ok: false, error: "知识库 Manifest 的仓库地址不受支持。" };
   if (JSON.stringify(value.categories) !== JSON.stringify(KNOWLEDGE_CATEGORY_IDS)) return { ok: false, error: "知识库分类与 Schema 1 不一致。" };
   return { ok: true, manifest: value };
 }

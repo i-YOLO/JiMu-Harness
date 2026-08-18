@@ -60,6 +60,14 @@ test("root inspection rejects malformed, future and incomplete knowledge roots",
   await writeFile(path.join(future, "jimu-knowledge.json"), JSON.stringify(manifest(2)));
   assert.equal((await inspectKnowledgeRoot(future)).phase, "incompatible");
 
+  const futureHarness = await fixture(t);
+  await writeFile(path.join(futureHarness, "jimu-knowledge.json"), JSON.stringify({ ...manifest(), minimumHarnessVersion: "9.0.0" }));
+  assert.equal((await inspectKnowledgeRoot(futureHarness)).phase, "incompatible");
+
+  const unexpectedRepository = await fixture(t);
+  await writeFile(path.join(unexpectedRepository, "jimu-knowledge.json"), JSON.stringify({ ...manifest(), repositoryUrl: "https://example.invalid/knowledge" }));
+  assert.equal((await inspectKnowledgeRoot(unexpectedRepository)).phase, "incompatible");
+
   const incomplete = await mkdtemp(path.join(os.tmpdir(), "jimu-incomplete-fixture-"));
   t.after(() => rm(incomplete, { recursive: true, force: true }));
   assert.equal((await inspectKnowledgeRoot(incomplete)).phase, "incompatible");

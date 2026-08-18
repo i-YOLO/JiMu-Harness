@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { FactoryService } from "./scripts/factory-service.mjs";
 import { KnowledgeIndexService } from "./scripts/knowledge-index-service.mjs";
+import { isTrustedPreviewRequest } from "./scripts/preview-request-security.mjs";
 
 const ASSET_TYPES = new Map([
   [".avif", "image/avif"], [".gif", "image/gif"], [".jpeg", "image/jpeg"],
@@ -71,6 +72,12 @@ function jimuKnowledgeIndex() {
 
       server.middlewares.use((request, response, next) => {
         const pathname = new URL(request.url ?? "/", "http://localhost").pathname;
+        if (pathname.startsWith("/_jimu/") && !isTrustedPreviewRequest(request)) {
+          response.statusCode = 403;
+          response.setHeader("Content-Type", "text/plain; charset=utf-8");
+          response.end("JiMu preview API accepts loopback same-origin requests only.");
+          return;
+        }
         if (pathname === "/_jimu/knowledge-events") {
           response.writeHead(200, {
             "Content-Type": "text/event-stream; charset=utf-8",
@@ -201,7 +208,7 @@ export default defineConfig({
     include: ["react", "react-dom/client"],
   },
   server: {
-    host: "0.0.0.0",
+    host: "127.0.0.1",
     allowedHosts: ["terminal.local"],
     warmup: {
       clientFiles: ["./src/main.jsx"],
