@@ -27,7 +27,7 @@ concurrency:
 jobs:
   build:
     name: Build four wheels
-    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'python-release-dry-run'
+    if: github.repository == 'deepseek-harness/deepseek-harness' && (github.event_name == 'workflow_dispatch' || github.event.label.name == 'python-release-dry-run')
     uses: ./.github/workflows/build-exe-for-python-sdk.yml
     with:
       targets: node24-linux-x64,node24-linux-arm64,node24-macos-arm64

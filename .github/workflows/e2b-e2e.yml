@@ -15,6 +15,7 @@ env:
 
 jobs:
   e2b:
+    if: github.repository == 'deepseek-harness/deepseek-harness'
     runs-on: ubuntu-latest
     name: E2B live Loader composition
     timeout-minutes: 30

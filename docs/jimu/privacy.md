@@ -13,3 +13,5 @@ Every public release must pass:
 - JiMu.app/DMG resource allowlist and string scan.
 
 Release builds are required to fetch the exact Knowledge Release specified in the lock file. A local template override is development-only and cannot satisfy the release gate.
+
+GitHub pull requests and `main` pushes run the JiMu security, upstream-compatibility, and macOS desktop jobs. Upstream organization, release, and enterprise CI workflows keep an explicit `deepseek-harness/deepseek-harness` repository guard and are disabled in the JiMu repository. Real DeepSeek API tests run only by manual request or by an explicitly enabled nightly schedule, using a limited repository secret that is separate from every user's local credential.

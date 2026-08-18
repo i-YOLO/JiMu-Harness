@@ -190,13 +190,9 @@ describe('DeepSeek credential discovery', () => {
       provider: 'deepseek-official',
     })).resolves.toEqual([{ id: 'registered-model' }])
 
-    expect(fetcher).toHaveBeenNthCalledWith(1, 'https://request.deepseek.test/models', expect.objectContaining({
-      headers: expect.any(Object),
-    }))
+    expect(fetcher.mock.calls[0]?.[0]).toBe('https://request.deepseek.test/models')
     expect(new Headers(fetcher.mock.calls[0]?.[1]?.headers).get('authorization')).toBe('Bearer bbbb')
-    expect(fetcher).toHaveBeenNthCalledWith(2, 'https://configured.deepseek.test/models', expect.objectContaining({
-      headers: expect.any(Object),
-    }))
+    expect(fetcher.mock.calls[1]?.[0]).toBe('https://configured.deepseek.test/models')
     expect(new Headers(fetcher.mock.calls[1]?.[1]?.headers).get('authorization')).toBe('Bearer aaaa')
   })
 })

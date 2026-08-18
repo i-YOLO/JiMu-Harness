@@ -27,6 +27,7 @@ defaults:
 
 jobs:
   matrix:
+    if: github.repository == 'deepseek-harness/deepseek-harness'
     name: Matrix
     runs-on: ubuntu-24.04
     outputs:
