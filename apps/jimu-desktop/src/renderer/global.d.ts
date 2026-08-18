@@ -3,7 +3,7 @@ export {}
 declare global {
   interface Window {
     jimu?: {
-      platform: 'macOS'
+      platform: 'macOS' | 'Windows'
       onboarding: {
         snapshot(): Promise<unknown>
         setModules(request: unknown): Promise<unknown>

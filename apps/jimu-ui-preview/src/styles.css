@@ -326,6 +326,29 @@ html[data-panel-resizing] .jimu-app {
   user-select: none;
 }
 
+.windows-titlebar-drag-region {
+  display: none;
+}
+
+html[data-jimu-platform="Windows"] .windows-titlebar-drag-region {
+  position: fixed;
+  z-index: 5;
+  top: 0;
+  right: 138px;
+  left: 0;
+  display: block;
+  height: 48px;
+  -webkit-app-region: drag;
+}
+
+html[data-jimu-platform="Windows"] .app-header {
+  padding-right: 166px;
+}
+
+html[data-jimu-platform="Windows"] .onboarding-page {
+  padding-top: 70px;
+}
+
 .app-header button,
 .app-header a,
 .app-header input,

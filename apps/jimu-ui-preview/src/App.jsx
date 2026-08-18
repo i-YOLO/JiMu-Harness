@@ -80,6 +80,15 @@ const CATEGORY_BY_ID = Object.fromEntries([
   ...KNOWLEDGE_AUXILIARY_CATEGORIES,
 ].map((category) => [category.id, category]));
 
+function desktopPlatformName() {
+  return globalThis.window.jimu?.platform ?? "浏览器预览";
+}
+
+function shortcutModifierLabel(symbol = false) {
+  if (globalThis.window.jimu?.platform === "Windows") return "Ctrl";
+  return symbol ? "⌘" : "Command";
+}
+
 const GRAPH_LAYOUT_OPTIONS = {
   name: "cose",
   randomize: true,
@@ -2060,7 +2069,7 @@ function SearchOverlay({ indexData, onClose, onOpen }) {
         <header className="search-command-head">
           <MagnifyingGlass size={22} weight="bold" />
           <input ref={inputRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索标题、正文、标签、路径或内链文字…" />
-          <kbd>⌘ K</kbd><button type="button" onClick={onClose} aria-label="关闭搜索"><X size={18} weight="bold" /></button>
+          <kbd>{shortcutModifierLabel(true)} K</kbd><button type="button" onClick={onClose} aria-label="关闭搜索"><X size={18} weight="bold" /></button>
         </header>
         <div className="search-filters">
           <select value={category} onChange={(event) => setCategory(event.target.value)} aria-label="分类筛选">
@@ -4248,7 +4257,7 @@ function SettingsScreen({ onboarding, onOnboardingChange }) {
           <button className="open-config-button" type="button" onClick={() => { void openSettingsDocument(); }}>
             <FileText size={17} />打开配置文件
           </button>
-          {configOpened && <p className="config-notice"><Check size={13} weight="bold" />已在 macOS 中打开 Harness 配置</p>}
+          {configOpened && <p className="config-notice"><Check size={13} weight="bold" />已在 {desktopPlatformName()} 中打开 Harness 配置</p>}
         </aside>
 
         <section className="settings-content" data-error={settingsError || undefined}>
@@ -4283,7 +4292,7 @@ function SettingsScreen({ onboarding, onOnboardingChange }) {
                     {AGENT_PRESETS.map((preset) => <option value={preset.id} key={preset.id}>{preset.label}</option>)}
                   </select>
                 </SettingsRow>
-                <SettingsRow icon={Command} title="繁忙时 Enter 键行为" description="Command + Enter 使用另一行为">
+                <SettingsRow icon={Command} title="繁忙时 Enter 键行为" description={`${shortcutModifierLabel()} + Enter 使用另一行为`}>
                   <select value={busyEnter} onChange={(event) => { const value = event.target.value; void updateSetting("ui-conversation", { busyEnter: value }, () => setBusyEnter(value)); }}>
                     <option value="queue">排队发送</option>
                     <option value="steer">插话发送</option>

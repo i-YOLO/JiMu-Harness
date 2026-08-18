@@ -1,9 +1,12 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
 type ChangeListener = (payload: unknown) => void
+type JimuPlatform = 'macOS' | 'Windows'
+
+const platform: JimuPlatform = process.platform === 'win32' ? 'Windows' : 'macOS'
 
 const bridge = {
-  platform: 'macOS' as const,
+  platform,
   onboarding: {
     snapshot: () => ipcRenderer.invoke('jimu:onboarding:snapshot'),
     setModules: (request: unknown) => ipcRenderer.invoke('jimu:onboarding:set-modules', request),

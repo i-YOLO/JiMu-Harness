@@ -100,5 +100,67 @@ jobs:
         run: pnpm --filter @i-yolo/jimu-desktop prepare:knowledge-template:release
       - name: Run JiMu tests
         run: pnpm run jimu:test
+      - name: Package macOS Apple Silicon application
+        run: pnpm --filter @i-yolo/jimu-desktop pack:mac
+      - name: Smoke-test packaged application
+        run: pnpm --filter @i-yolo/jimu-desktop test:packaged
+      - name: Audit packaged application
+        run: node scripts/jimu-release-audit.mjs --root apps/jimu-desktop/release/mac-arm64/JiMu.app/Contents/Resources --platform darwin --arch arm64
+
+  windows-desktop:
+    name: windows-desktop
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
+        with:
+          version: 11.7.0
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build shared libraries
+        run: pnpm run build:lib
+      - name: Verify the locked Knowledge template
+        run: pnpm --filter @i-yolo/jimu-desktop prepare:knowledge-template:release
+      - name: Run JiMu tests
+        run: pnpm run jimu:test
+      - name: Run native Windows shell and ACL tests
+        run: >-
+          pnpm exec vitest run
+          apps/cli/tests/windows-shell.spec.ts
+          packages/shell/pwsh-local/tests/executor.spec.ts
+          packages/sandbox/sandbox-windows-acl/tests/probe.spec.ts
+          packages/shell/pwsh-sandbox/tests/acl.e2e.ts
       - name: Build JiMu Desktop
         run: pnpm --filter @i-yolo/jimu-desktop build
+      - name: Build synthetic baseline installer
+        run: pnpm --filter @i-yolo/jimu-desktop exec node scripts/build-windows.mjs --version 0.1.99 --output release/baseline
+      - name: Build unsigned Windows installer
+        run: pnpm --filter @i-yolo/jimu-desktop exec node scripts/build-windows.mjs
+      - name: Audit unpacked Windows application
+        run: node scripts/jimu-release-audit.mjs --root apps/jimu-desktop/release/win-unpacked/resources --platform win32 --arch x64
+      - name: Exercise install, upgrade, ConPTY, and uninstall lifecycle
+        run: |
+          $version = (Get-Content apps/jimu-desktop/package.json | ConvertFrom-Json).version
+          & apps/jimu-desktop/scripts/test-windows-installer.ps1 `
+            -BaselineInstaller "apps/jimu-desktop/release/baseline/JiMu-0.1.99-Windows-x64-Setup.exe" `
+            -Installer "apps/jimu-desktop/release/JiMu-$version-Windows-x64-Setup.exe" `
+            -Version $version `
+            -ExpectedSignature NotSigned
+      - name: Generate checksum
+        run: |
+          $version = (Get-Content apps/jimu-desktop/package.json | ConvertFrom-Json).version
+          $installer = "apps/jimu-desktop/release/JiMu-$version-Windows-x64-Setup.exe"
+          $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $installer).Hash.ToLowerInvariant()
+          "$hash  $(Split-Path -Leaf $installer)" | Out-File -Encoding ascii "$installer.sha256"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: jimu-windows-x64-pr
+          path: |
+            apps/jimu-desktop/release/JiMu-*-Windows-x64-Setup.exe
+            apps/jimu-desktop/release/JiMu-*-Windows-x64-Setup.exe.sha256
+          if-no-files-found: error
+          retention-days: 7

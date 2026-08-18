@@ -553,7 +553,14 @@ function formatError(error: unknown, seen = new Set<unknown>()): string {
   }
 }
 
-const userData = process.env.JIMU_USER_DATA_DIR ?? join(app.getPath('appData'), 'JiMu')
+function defaultUserDataDirectory(): string {
+  if (process.platform !== 'win32') return join(app.getPath('appData'), 'JiMu')
+  const localAppData = process.env.LOCALAPPDATA
+  if (!localAppData) throw new Error('JiMu requires LOCALAPPDATA on Windows')
+  return join(localAppData, 'JiMu')
+}
+
+const userData = process.env.JIMU_USER_DATA_DIR ?? defaultUserDataDirectory()
 app.setPath('userData', userData)
 app.setName('JiMu')
 
@@ -1395,30 +1402,45 @@ function openHarnessEventPort(event: IpcMainEvent): void {
 }
 
 function installMenu(): void {
-  const template: Electron.MenuItemConstructorOptions[] = [
-    {
-      label: 'JiMu',
-      submenu: [
-        { role: 'about' },
-        { type: 'separator' },
-        { label: '设置…', accelerator: 'Command+,', click: () => mainWindow?.webContents.send('jimu:command:settings') },
-        { type: 'separator' },
-        { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' },
-        { type: 'separator' }, { role: 'quit' },
-      ],
-    },
-    {
-      label: '编辑',
-      submenu: [
-        { role: 'undo' }, { role: 'redo' }, { type: 'separator' },
-        { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' },
-        { type: 'separator' },
-        { label: '搜索全部档案', accelerator: 'Command+K', click: () => mainWindow?.webContents.send('jimu:command:search') },
-      ],
-    },
-    { label: '显示', submenu: [{ role: 'reload' }, { role: 'toggleDevTools' }, { type: 'separator' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { type: 'separator' }, { role: 'togglefullscreen' }] },
-    { label: '窗口', submenu: [{ role: 'minimize' }, { role: 'zoom' }, { type: 'separator' }, { role: 'front' }] },
-  ]
+  const settings: Electron.MenuItemConstructorOptions = {
+    label: '设置…', accelerator: 'CmdOrCtrl+,', click: () => mainWindow?.webContents.send('jimu:command:settings'),
+  }
+  const search: Electron.MenuItemConstructorOptions = {
+    label: '搜索全部档案', accelerator: 'CmdOrCtrl+K', click: () => mainWindow?.webContents.send('jimu:command:search'),
+  }
+  const edit: Electron.MenuItemConstructorOptions = {
+    label: '编辑',
+    submenu: [
+      { role: 'undo' }, { role: 'redo' }, { type: 'separator' },
+      { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' },
+      { type: 'separator' }, search,
+    ],
+  }
+  const view: Electron.MenuItemConstructorOptions = {
+    label: '显示',
+    submenu: [{ role: 'reload' }, { role: 'toggleDevTools' }, { type: 'separator' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { type: 'separator' }, { role: 'togglefullscreen' }],
+  }
+  const template: Electron.MenuItemConstructorOptions[] = process.platform === 'darwin'
+    ? [
+      {
+        label: 'JiMu',
+        submenu: [
+          { role: 'about' }, { type: 'separator' }, settings, { type: 'separator' },
+          { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' },
+          { type: 'separator' }, { role: 'quit' },
+        ],
+      },
+      edit,
+      view,
+      { label: '窗口', submenu: [{ role: 'minimize' }, { role: 'zoom' }, { type: 'separator' }, { role: 'front' }] },
+    ]
+    : [
+      { label: '文件', submenu: [settings, { type: 'separator' }, { role: 'quit', label: '退出 JiMu' }] },
+      edit,
+      view,
+      { label: '窗口', submenu: [{ role: 'minimize' }, { role: 'close' }] },
+      { label: '帮助', submenu: [{ label: '关于 JiMu', click: () => { app.showAboutPanel() } }] },
+    ]
   Menu.setApplicationMenu(Menu.buildFromTemplate(template))
 }
 
@@ -1789,8 +1811,15 @@ function createWindow(): BrowserWindow {
     fullscreenable: true,
     backgroundColor: '#0e0d2b',
     show: false,
-    titleBarStyle: 'hiddenInset',
-    trafficLightPosition: { x: 18, y: 18 },
+    ...(process.platform === 'win32'
+      ? {
+        titleBarStyle: 'hidden' as const,
+        titleBarOverlay: { color: '#0e0d2b', symbolColor: '#fff', height: 48 },
+      }
+      : {
+        titleBarStyle: 'hiddenInset' as const,
+        trafficLightPosition: { x: 18, y: 18 },
+      }),
     icon: applicationIconPath(),
     webPreferences: {
       preload: join(app.getAppPath(), 'dist', 'preload', 'index.cjs'),
