@@ -14,6 +14,8 @@ Synthetic credential fixtures create a second ambiguity. Secret scanners correct
 
 `JiMu downstream gates` is the only automatic product workflow owned by the downstream repository. It exposes three stable jobs: a source and history security scan, a bounded Node 24 upstream-compatibility run, and a macOS JiMu Desktop build and test run. The workflow is reusable, so the manual macOS release repeats the same jobs before building, mounting, auditing, checksumming, and publishing a DMG from the exact `main` commit. JiMu-owned remote actions use reviewed full commit SHAs and current Node 24-compatible action runtimes.
 
+Electron Builder resolves the distribution for the manifest's locked Electron version. The packaging configuration must not point `electronDist` at a workspace-local `node_modules` path because pnpm's CI layout does not guarantee that path exists.
+
 Gitleaks runs before dependency installation, loads `.gitleaks.toml` explicitly, and scans both the source tree and `upstream/master..HEAD`. The allowlist names reviewed upstream fixture paths; it does not suppress a rule or an arbitrary credential value. Generated dependency, build, coverage, and release directories are excluded from the source scan and are handled by the release audit instead. A temporary high-entropy negative control proves on every run that a newly introduced credential still fails the job.
 
 Every independent job in an upstream-only workflow checks that `github.repository` is `deepseek-harness/deepseek-harness`. The JiMu repository also disables those workflows after the guard lands. The source remains available for upstream synchronization, while JiMu pull requests spend runner time only on the downstream jobs and CodeQL.

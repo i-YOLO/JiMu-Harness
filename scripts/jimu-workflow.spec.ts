@@ -63,6 +63,15 @@ describe('JiMu GitHub workflows', () => {
     expect(steps).toContain('gh release create')
   })
 
+  it('lets electron-builder resolve the locked Electron distribution portably', () => {
+    const manifest = loadJson('apps/jimu-desktop/package.json')
+    const build = record(manifest.build, 'JiMu Desktop build configuration')
+    const devDependencies = record(manifest.devDependencies, 'JiMu Desktop development dependencies')
+
+    expect(devDependencies.electron).toBe('43.4.0')
+    expect(build.electronDist).toBeUndefined()
+  })
+
   it('pins every remote action used by active JiMu workflows', () => {
     for (const path of [
       '.github/workflows/jimu.yml',
@@ -157,6 +166,11 @@ describe('JiMu Dependabot policy', () => {
 
 function loadYaml(path: string): Record<string, unknown> {
   const parsed: unknown = yaml.load(readFileSync(resolve(root, path), 'utf8'))
+  return record(parsed, path)
+}
+
+function loadJson(path: string): Record<string, unknown> {
+  const parsed: unknown = JSON.parse(readFileSync(resolve(root, path), 'utf8'))
   return record(parsed, path)
 }
 
