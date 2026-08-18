@@ -16,6 +16,8 @@ Synthetic credential fixtures create a second ambiguity. Secret scanners correct
 
 Electron Builder resolves the distribution for the manifest's locked Electron version. The packaging configuration must not point `electronDist` at a workspace-local `node_modules` path because pnpm's CI layout does not guarantee that path exists.
 
+The desktop package declares its public repository metadata and invokes Electron Builder with `--publish never`. The workflow does not expose `GH_TOKEN` to build, smoke, or audit steps; the token is scoped only to release existence checks and the final `gh release create` command. This prevents Electron Builder from inferring an implicit publisher while keeping the explicit GitHub Release operation authorized.
+
 Gitleaks runs before dependency installation, loads `.gitleaks.toml` explicitly, and scans both the source tree and `upstream/master..HEAD`. The allowlist names reviewed upstream fixture paths; it does not suppress a rule or an arbitrary credential value. Generated dependency, build, coverage, and release directories are excluded from the source scan and are handled by the release audit instead. A temporary high-entropy negative control proves on every run that a newly introduced credential still fails the job.
 
 Every independent job in an upstream-only workflow checks that `github.repository` is `deepseek-harness/deepseek-harness`. The JiMu repository also disables those workflows after the guard lands. The source remains available for upstream synchronization, while JiMu pull requests spend runner time only on the downstream jobs and CodeQL.

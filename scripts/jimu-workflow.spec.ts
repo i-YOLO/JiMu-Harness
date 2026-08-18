@@ -56,6 +56,7 @@ describe('JiMu GitHub workflows', () => {
     expect(Object.keys(events)).toEqual(['workflow_dispatch'])
     expect(gates.uses).toBe('./.github/workflows/jimu.yml')
     expect(release.if).toBe("github.ref == 'refs/heads/main'")
+    expect(record(release.env, 'release environment').GH_TOKEN).toBeUndefined()
     const steps = JSON.stringify(release.steps)
     expect(steps).toContain('pnpm run build:lib')
     expect(steps).toContain('jimu-release-audit.mjs')
@@ -67,9 +68,14 @@ describe('JiMu GitHub workflows', () => {
     const manifest = loadJson('apps/jimu-desktop/package.json')
     const build = record(manifest.build, 'JiMu Desktop build configuration')
     const devDependencies = record(manifest.devDependencies, 'JiMu Desktop development dependencies')
+    const repository = record(manifest.repository, 'JiMu Desktop repository metadata')
+    const scripts = record(manifest.scripts, 'JiMu Desktop scripts')
 
     expect(devDependencies.electron).toBe('43.4.0')
     expect(build.electronDist).toBeUndefined()
+    expect(repository.url).toBe('https://github.com/i-YOLO/JiMu-Harness.git')
+    expect(repository.directory).toBe('apps/jimu-desktop')
+    expect(scripts['dist:mac']).toContain('--publish never')
   })
 
   it('pins every remote action used by active JiMu workflows', () => {
