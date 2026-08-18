@@ -222,6 +222,9 @@ describe('translation scope discovery', () => {
     'packages/example/node_modules/dependency/README.md',
     'packages/example/lib/README.md',
     'coverage/report/README.md',
+    'README.en.md',
+    'apps/jimu-desktop/build-cache/jimu-knowledge-template/README.md',
+    'apps/jimu-desktop/release/mac-arm64/JiMu.app/Contents/Resources/jimu-knowledge-template/README.md',
     'python/sdk-runtime/src/deepseek_harness_runtime/runtime/dsh-jsonrpc-agent-macos-arm64/README.md',
     'python/sdk-runtime/src/deepseek_harness_runtime/runtime/node/README.md',
   ])('excludes non-source or non-README path %s', (file) => {

@@ -1,43 +1,31 @@
 # JiMu Harness
 
-[中文](README.zh.md) | English
+中文 | [English](README.en.md)
 
-JiMu Harness is a local-first macOS desktop workspace built on the official
-[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) and Cordis plugin runtime. It adds a native
-Electron shell, a JiMu renderer, managed plugin controls, an embedded Harness
-lifecycle, and an optional Markdown knowledge protocol.
+JiMu Harness 是基于官方 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 与 Cordis 插件运行时构建的本地优先 macOS 桌面工作台。项目新增原生 Electron 宿主、JiMu 界面、受策略约束的插件管理、内置 Harness 生命周期，以及可选的 Markdown 知识库协议。
 
-This repository preserves the complete upstream Git history and tags. DeepSeek
-Harness remains an upstream project authored by DeepSeek AI; JiMu-specific work
-is maintained as a downstream product layer.
+本仓库保留 DeepSeek Harness 的完整上游历史和 Tags。DeepSeek Harness 仍是 DeepSeek AI 开发的上游项目；JiMu 代码作为下游产品层独立维护。
 
-## Privacy boundary
+## 隐私边界
 
-The repository contains no user knowledge, projects, sessions, credentials,
-analytics, screenshots, or demo records. A first launch has no configured
-knowledge root and shows a setup state. JiMu does not scan the home directory.
+仓库不包含任何用户知识、项目、会话、凭据、统计、截图或演示记录。首次启动没有默认知识库，只显示配置空态；JiMu 不扫描用户主目录。
 
-The empty companion template lives in
-[i-YOLO/JiMu-Knowledge](https://github.com/i-YOLO/JiMu-Knowledge). Git synchronization is intentionally delegated to
-the user's normal Git tooling; the app does not store repository credentials.
+空白配套模板位于 [i-YOLO/JiMu-Knowledge](https://github.com/i-YOLO/JiMu-Knowledge)。Git 同步交给用户现有的 Git 工具，应用不保存仓库凭据。
 
-## Architecture
+## 代码结构
 
-- `apps/jimu-desktop`: Electron main process, preload boundary, plugin policy,
-  Harness lifecycle, native folder selection, and packaging.
-- `apps/jimu-ui-preview`: JiMu renderer, read-only knowledge index, and
-  write-on-action media factory.
-- `apps/jimu-ui-preview/shared/knowledge-schema.mjs`: the single fixed source
-  for the eight public knowledge categories.
-- `packages`, `apps/cli`, `vendor`, and `examples`: upstream DeepSeek Harness.
-  Official examples remain source-only and are excluded from JiMu.app/DMG.
+- `apps/jimu-desktop`：Electron 主进程、preload 安全边界、插件策略、Harness 生命周期、原生目录选择与打包。
+- `apps/jimu-ui-preview`：JiMu Renderer、只读知识索引和仅在真实写入操作发生时创建目录的自媒体工厂。
+- `apps/jimu-ui-preview/shared/knowledge-schema.mjs`：八个公开分类的唯一配置源。
+- `packages`、`apps/cli`、`vendor`、`examples`：DeepSeek Harness 上游源码。官方 examples 只保留在源码中，不进入 JiMu.app 或 DMG。
 
-See [JiMu architecture](docs/jimu/architecture.md), [privacy and release
-boundaries](docs/jimu/privacy.md), and [upstream synchronization](docs/jimu/upstream-sync.md).
+进一步阅读：[架构](docs/jimu/architecture.md)、[隐私与发布边界](docs/jimu/privacy.md)、[上游同步](docs/jimu/upstream-sync.md)。
 
-## Development
+<a id="run"></a><a id="run-from-source"></a>
 
-Requirements: Node.js 22.19+ and pnpm 11.7.
+## 本地开发
+
+需要 Node.js 22.19+ 与 pnpm 11.7。
 
 ```sh
 pnpm install --frozen-lockfile
@@ -47,37 +35,26 @@ JIMU_KNOWLEDGE_TEMPLATE_DIR=/path/to/JiMu-Knowledge \
 pnpm --filter @i-yolo/jimu-desktop build
 ```
 
-Run the browser renderer without local data:
+浏览器开发预览在没有数据源时只显示空态：
 
 ```sh
 pnpm --filter @i-yolo/jimu-ui-preview dev
 ```
 
-Official release builds never accept an unlocked local template. They download
-the release named in `apps/jimu-desktop/config/knowledge-template-lock.json`,
-verify SHA-256 and the empty Schema 1 structure, then package it as an
-`extraResource`.
+正式发布构建不会接受未锁定的本地目录。构建器会下载 `apps/jimu-desktop/config/knowledge-template-lock.json` 指定的 Release，校验 SHA-256、Manifest 和空目录结构，再作为 `extraResource` 打入应用。
 
-## Compatibility
+## 兼容矩阵
 
-| JiMu Harness | Knowledge schema | Knowledge template |
+| JiMu Harness | Knowledge Schema | Knowledge Template |
 | --- | --- | --- |
 | 0.1.x | 1 | 1.0.x |
 
-Roots without a manifest but containing every standard directory are opened as
-read-only-compatible `legacy-schema-1`. Invalid or future manifests are rejected
-without replacing the active root.
+没有 Manifest 但具备完整标准目录的知识库会以 `legacy-schema-1` 兼容模式加载且不被写入。损坏或版本过高的 Manifest 会被拒绝，并保留当前可用知识库。
 
-## Upstream DeepSeek Harness
+## DeepSeek Harness 上游
 
-To use the original DeepSeek Harness Web UI or CLI, consult the
-[upstream documentation](https://github.com/deepseek-ai/deepseek-harness). JiMu
-keeps `upstream` fetch-only and does not replace upstream authorship, notices, or
-the MIT license.
+如需使用原版 DeepSeek Harness Web UI 或 CLI，请参阅[上游文档](https://github.com/deepseek-ai/deepseek-harness)。JiMu 将 `upstream` 设为仅抓取，不替换上游作者信息、声明或 MIT License。
 
-## License and marks
+## 开源许可与品牌
 
-Code is licensed under [MIT](LICENSE), with upstream copyright retained.
-JiMu names, logos, and character artwork are excluded from the MIT trademark
-grant; see [TRADEMARKS.md](TRADEMARKS.md). Third-party notices are in
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+代码使用 [MIT](LICENSE)，并保留上游版权。JiMu 名称、Logo 和角色形象不包含在 MIT 的商标授权中，详见 [TRADEMARKS.md](TRADEMARKS.md)。第三方声明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
