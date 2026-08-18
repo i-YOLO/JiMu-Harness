@@ -30,3 +30,15 @@ paths = [
   '''^packages/session/session-telemetry-otel/tests/loader-composition\.e2e\.ts$''',
   '''^packages/session/session-telemetry/tests/redact\.spec\.ts$''',
 ]
+
+# Generated dependency, build, coverage, and packaged-app directories are not
+# source inputs. JiMu audits their source before building, and release artifacts
+# are checked separately by scripts/jimu-release-audit.mjs.
+[[allowlists]]
+description = "Generated dependencies, caches, and release outputs"
+paths = [
+  '''(^|/)node_modules/''',
+  '''(^|/)\.turbo/''',
+  '''(^|/)\.vite/''',
+  '''(^|/)(dist|coverage|release|artifacts)/''',
+]
