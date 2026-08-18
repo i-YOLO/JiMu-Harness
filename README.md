@@ -8,9 +8,11 @@ JiMu Harness 是基于官方 [DeepSeek Harness](https://github.com/deepseek-ai/d
 
 ## 隐私边界
 
-仓库不包含任何用户知识、项目、会话、凭据、统计、截图或演示记录。首次启动没有默认知识库，只显示配置空态；JiMu 不扫描用户主目录。
+仓库不包含任何用户知识、项目、会话、凭据、统计、截图或演示记录。首次启动会依次选择按需模块、安装本地知识库并验证 DeepSeek API Key；JiMu 不扫描用户主目录。
 
 空白配套模板位于 [i-YOLO/JiMu-Knowledge](https://github.com/i-YOLO/JiMu-Knowledge)。Git 同步交给用户现有的 Git 工具，应用不保存仓库凭据。
+
+默认配置从锁定的 GitHub Release 安装完整 JiMu-Knowledge，断网时自动使用 DMG 内置的同版本副本。`07-对标博主库` 与 `08-自媒体工厂` 可以在首次配置或设置页分别关闭；关闭不会创建、扫描或删除对应目录。
 
 ## 代码结构
 
@@ -49,7 +51,7 @@ pnpm --filter @i-yolo/jimu-ui-preview dev
 | --- | --- | --- |
 | 0.1.x | 1 | 1.0.x |
 
-没有 Manifest 但具备完整标准目录的知识库会以 `legacy-schema-1` 兼容模式加载且不被写入。`assets` 可以是解析后仍位于知识库根目录内的目录符号链接；指向外部、已经失效或指向文件的链接会被拒绝，内容分类目录仍须为真实目录。损坏或版本过高的 Manifest 会被拒绝，并保留当前可用知识库。
+没有 Manifest 但具备核心标准目录的知识库会以 `legacy-schema-1` 兼容模式加载且不被写入；已启用的按需模块仍须存在。`assets` 可以是解析后仍位于知识库根目录内的目录符号链接；指向外部、已经失效或指向文件的链接会被拒绝，内容分类目录仍须为真实目录。损坏或版本过高的 Manifest 会被拒绝，并保留当前可用知识库。
 
 ## DeepSeek Harness 上游
 

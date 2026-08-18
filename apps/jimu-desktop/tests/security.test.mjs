@@ -42,6 +42,8 @@ test("desktop shell keeps the approved macOS and Electron security posture", asy
   assert.match(main, /jimu:factory:import-assets/);
   assert.match(preload, /factory:\s*\{/);
   assert.match(preload, /plugins:\s*\{/);
+  assert.match(preload, /onboarding:\s*\{/);
+  assert.match(preload, /jimu:onboarding:test-deepseek/);
   assert.match(preload, /jimu:plugins:apply-toggles/);
   assert.doesNotMatch(preload, /require\s*\(|node:fs|from ['"]fs['"]/);
   assert.match(factoryService, /FACTORY_DIRECTORY = "08-自媒体工厂"/);
@@ -71,6 +73,10 @@ test("desktop shell keeps the approved macOS and Electron security posture", asy
   assert.match(main, /revision !== current\.revision/);
   assert.match(main, /group\.management === 'toggleable'/);
   assert.match(main, /pluginOperationPending/);
+  assert.match(main, /readKnowledgeTemplateLock/);
+  assert.match(main, /AbortSignal\.timeout\(30_000\)/);
+  assert.match(main, /settingsNs: 'llm-deepseek'/);
+  assert.doesNotMatch(main, /credential:\s*\{[^}]*apiKey/s);
   assert.match(pluginManager, /rename\(temporary, path\)/);
   assert.match(pluginManager, /management: 'locked'/);
   assert.doesNotMatch(policy, /ui-settings-plugin-inventory|ui-settings-plugins|web-runtime|webserver/);

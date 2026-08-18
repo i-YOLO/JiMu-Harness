@@ -58,6 +58,8 @@ harness LLM（大语言模型）seam 的 DeepSeek chat-completions 适配器：�
 
 该插件还会在可配置提供方目录（`ctx.llm.listConfigurableProviders()`）中声明自己的路由：提供方为 `deepseek-official`，settings namespace 为 `llm-deepseek`，settings path 为空——整个分节就是 profile。配置界面借助该条目，把本适配器与休眠的 pi-ai 提供方一并呈现。
 
+同一 namespace 还会注册经过身份验证的模型发现，用于首次运行时验证凭据。它向解析后的 DeepSeek base URL 发送带 Bearer 认证的 `GET /models`，拒绝跳转和超大响应，不写入任何内容，并只返回模型 id。界面可以为一次测试提供草稿 Key；若未提供，插件会解析已配置凭据，但不会把凭据暴露给客户端。
+
 ## 应用归因
 
 每个请求都携带 dsh-llm `attributionHeaders()` 的共享归因标头，即用于识别 harness 的必需 `User-Agent` 基线（见 [dsh-llm § 应用归因](../llm/README.md#app-attribution-attributionts)）。在该适配器约定（adapter contract）下，直接 DeepSeek 请求与 OpenAI 兼容 gateway 请求都不会获得提供方特定应用归因标头；OpenRouter 应用归因暂缓到未来的显式 OpenRouter 适配器或模式。`GenerateOptions.purpose` 为 `compaction` 的请求（dsh-compaction-basic 的辅助摘要调用）还会携带 `x-deepseek-harness-compact: 1`，让宿主可以将压缩流量与会话请求分开。

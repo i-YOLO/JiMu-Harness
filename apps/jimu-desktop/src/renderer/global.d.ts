@@ -4,6 +4,16 @@ declare global {
   interface Window {
     jimu?: {
       platform: 'macOS'
+      onboarding: {
+        snapshot(): Promise<unknown>
+        setModules(request: unknown): Promise<unknown>
+        installDefault(request: unknown): Promise<unknown>
+        previewExisting(request: unknown): Promise<unknown>
+        applyExisting(request: unknown): Promise<unknown>
+        testAndSaveDeepSeek(request: unknown): Promise<unknown>
+        updateModules(request: unknown): Promise<unknown>
+        subscribe(listener: (payload: unknown) => void): () => void
+      }
       knowledge: {
         getSetup(): Promise<unknown>
         createStarter(request: { folderName: string }): Promise<unknown>

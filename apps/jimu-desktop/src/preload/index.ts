@@ -4,6 +4,20 @@ type ChangeListener = (payload: unknown) => void
 
 const bridge = {
   platform: 'macOS' as const,
+  onboarding: {
+    snapshot: () => ipcRenderer.invoke('jimu:onboarding:snapshot'),
+    setModules: (request: unknown) => ipcRenderer.invoke('jimu:onboarding:set-modules', request),
+    installDefault: (request: unknown) => ipcRenderer.invoke('jimu:onboarding:install-default', request),
+    previewExisting: (request: unknown) => ipcRenderer.invoke('jimu:onboarding:preview-existing', request),
+    applyExisting: (request: unknown) => ipcRenderer.invoke('jimu:onboarding:apply-existing', request),
+    testAndSaveDeepSeek: (request: unknown) => ipcRenderer.invoke('jimu:onboarding:test-deepseek', request),
+    updateModules: (request: unknown) => ipcRenderer.invoke('jimu:onboarding:update-modules', request),
+    subscribe(listener: ChangeListener) {
+      const wrapped = (_event: Electron.IpcRendererEvent, payload: unknown) => { listener(payload) }
+      ipcRenderer.on('jimu:onboarding:changed', wrapped)
+      return () => ipcRenderer.removeListener('jimu:onboarding:changed', wrapped)
+    },
+  },
   knowledge: {
     getSetup: () => ipcRenderer.invoke('jimu:knowledge:get-setup'),
     createStarter: (request: unknown) => ipcRenderer.invoke('jimu:knowledge:create-starter', request),

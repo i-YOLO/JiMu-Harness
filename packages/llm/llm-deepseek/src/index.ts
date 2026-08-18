@@ -27,6 +27,7 @@ import {
   DeepSeekAdapter,
 } from './adapter.ts'
 import type { DeepSeekCatalogModel, DeepSeekConnectionOptions } from './adapter.ts'
+import { discoverDeepSeekModels } from './discovery.ts'
 
 export {
   DEFAULT_CONTEXT_WINDOW,
@@ -254,6 +255,14 @@ export function apply(ctx: Context, config: Config): void {
   // Route effects bind to this apply fiber via the stable `ctx` reference,
   // even when a swap runs inside the scoped settings callback below.
   const registration = ctx.llm.registerAdapter([PROVIDER], adapter)
+  ctx.llm.registerModelDiscovery(NS, async (request) => {
+    const connection = options()
+    return await discoverDeepSeekModels({
+      ...request,
+      baseURL: request.baseURL ?? connection.baseURL,
+      apiKey: request.apiKey ?? await resolveApiKey(connection),
+    })
+  })
   let registeredPolicy = options().retryPolicy
   const ensureRegistrationFacts = (): void => {
     const policy = options().retryPolicy

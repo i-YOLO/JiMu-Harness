@@ -52,11 +52,13 @@ import {
   SquaresFour,
   Star,
   Translate,
+  UsersThree,
   X,
 } from "@phosphor-icons/react";
 import { describeHarnessError, groupSkillCatalog, historyMessages, summarizeUsage } from "./agent-transcript.js";
 import { FactoryScreen } from "./factory-screen.jsx";
 import { PluginSettingsPanel } from "./plugin-settings.jsx";
+import { OnboardingScreen } from "./onboarding-screen.jsx";
 import { UsageScreen } from "./usage-screen.jsx";
 import { numberReaderOutline } from "./reader-outline.js";
 import {
@@ -107,7 +109,7 @@ const knowledgeApi = {
     return globalThis.window.jimu?.knowledge.getSetup()
       ?? Promise.resolve({
         phase: "unconfigured",
-        template: { repositoryUrl: JIMU_KNOWLEDGE_REPOSITORY_URL, templateVersion: "1.0.0", bundled: false },
+        template: { repositoryUrl: JIMU_KNOWLEDGE_REPOSITORY_URL, templateVersion: "1.0.1", bundled: false },
       });
   },
   createStarter(request) {
@@ -504,7 +506,7 @@ function ModeButton({ active, number, icon: Icon, label, caption, onClick, colla
   );
 }
 
-function AppSidebar({ mode, setMode, collapsed, onToggleCollapse, resizeHandle }) {
+function AppSidebar({ mode, setMode, collapsed, onToggleCollapse, resizeHandle, modules }) {
   const status = mode === "agent"
     ? ["多项目模式", "PROJECTS / SESSIONS"]
     : mode === "factory"
@@ -547,15 +549,17 @@ function AppSidebar({ mode, setMode, collapsed, onToggleCollapse, resizeHandle }
           collapsed={collapsed}
           onClick={() => setMode("knowledge")}
         />
-        <ModeButton
-          active={mode === "factory"}
-          number="03"
-          icon={Factory}
-          label="自媒体工厂"
-          caption="内容流水线"
-          collapsed={collapsed}
-          onClick={() => setMode("factory")}
-        />
+        {modules.factory && (
+          <ModeButton
+            active={mode === "factory"}
+            number="03"
+            icon={Factory}
+            label="自媒体工厂"
+            caption="内容流水线"
+            collapsed={collapsed}
+            onClick={() => setMode("factory")}
+          />
+        )}
         <ModeButton
           active={mode === "usage"}
           number="04"
@@ -1017,7 +1021,7 @@ function BenchmarkSectionHeading({ number, kicker, title, caption }) {
   );
 }
 
-function KnowledgeHome({ indexData, category, setCategory, sort, setSort, onOpen, onOpenAccount, onOpenProject }) {
+function KnowledgeHome({ indexData, category, setCategory, sort, setSort, onOpen, onOpenAccount, onOpenProject, categories = CATEGORIES }) {
   const documentById = useMemo(
     () => new Map(indexData.documents.map((document) => [document.stableId, document])),
     [indexData],
@@ -1068,7 +1072,7 @@ function KnowledgeHome({ indexData, category, setCategory, sort, setSort, onOpen
     return counts;
   }, [visibleDocuments]);
   const categoryStats = new Map(indexData.categories.map((item) => [item.id, item]));
-  const categoryItems = CATEGORIES.map((item) => ({
+  const categoryItems = categories.map((item) => ({
     ...item,
     count: item.id === "all" ? indexData.stats.archiveCards : (categoryStats.get(item.id)?.cardCount ?? 0),
     documentCount: item.id === "all" ? indexData.stats.markdownDocuments : (categoryStats.get(item.id)?.documentCount ?? 0),
@@ -1659,7 +1663,7 @@ function OverviewStat({ value, label, caption, accent }) {
   );
 }
 
-function KnowledgeOverview({ indexData, onNavigate }) {
+function KnowledgeOverview({ indexData, onNavigate, modules }) {
   const [activeStage, setActiveStage] = useState("inspiration");
   const stage = ROADMAP_STAGES.find((item) => item.id === activeStage) ?? ROADMAP_STAGES[0];
   return (
@@ -1674,7 +1678,7 @@ function KnowledgeOverview({ indexData, onNavigate }) {
           <OverviewStat value={indexData.stats.inspirations} label="项目灵感" caption="01-INBOX" accent="yellow" />
           <OverviewStat value={indexData.stats.projects} label="项目文档" caption="02-PROJECTS" accent="teal" />
           <OverviewStat value={indexData.stats.knowledgeCards} label="正式知识" caption="03-KNOWLEDGE" accent="cobalt" />
-          <OverviewStat value={indexData.stats.benchmarkProfiles} label="博主档案" caption="REAL PROFILES" accent="magenta" />
+          {modules.benchmarks && <OverviewStat value={indexData.stats.benchmarkProfiles} label="博主档案" caption="REAL PROFILES" accent="magenta" />}
         </div>
       </section>
 
@@ -1721,7 +1725,7 @@ function KnowledgeOverview({ indexData, onNavigate }) {
   );
 }
 
-function KnowledgeGraph({ onOpen }) {
+function KnowledgeGraph({ onOpen, categories = CATEGORIES, modules }) {
   const containerRef = useRef(null);
   const graphRef = useRef(null);
   const [graph, setGraph] = useState(null);
@@ -1886,9 +1890,9 @@ function KnowledgeGraph({ onOpen }) {
       </header>
       <section className="graph-controls">
         <label><MagnifyingGlass size={15} weight="bold" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索图谱节点" /></label>
-        <select value={category} onChange={(event) => setCategory(event.target.value)}><option value="all">全部分类</option>{CATEGORIES.filter((item) => item.id !== "all").map((item) => <option value={item.id} key={item.id}>{item.label}</option>)}</select>
+        <select value={category} onChange={(event) => setCategory(event.target.value)}><option value="all">全部分类</option>{categories.filter((item) => item.id !== "all").map((item) => <option value={item.id} key={item.id}>{item.label}</option>)}</select>
         <select value={type} onChange={(event) => setType(event.target.value)}><option value="all">全部类型</option>{graphTypes.map((item) => <option value={item} key={item}>{TYPE_LABELS[item] ?? item}</option>)}</select>
-        <select value={source} onChange={(event) => setSource(event.target.value)}><option value="key">关键节点（推荐）</option><option value="hot">Hot Index</option><option value="memory">Memory Index</option><option value="benchmark">博主档案</option><option value="linked">关联节点</option><option value="all">全部精选来源</option></select>
+        <select value={source} onChange={(event) => setSource(event.target.value)}><option value="key">关键节点（推荐）</option><option value="hot">Hot Index</option><option value="memory">Memory Index</option>{modules.benchmarks && <option value="benchmark">博主档案</option>}<option value="linked">关联节点</option><option value="all">全部精选来源</option></select>
         <label className="graph-isolate-toggle"><input type="checkbox" checked={hideIsolated} onChange={(event) => setHideIsolated(event.target.checked)} />隐藏无内链节点</label>
         <button type="button" onClick={() => fitGraph(30)}>适配视口</button>
         <button type="button" onClick={relayoutGraph}>重置布局</button>
@@ -2208,7 +2212,7 @@ function KnowledgeSetupPanel({ setup, onReady, onSkip, context = "knowledge" }) 
   );
 }
 
-function KnowledgeScreen({ indexState, section, setSection, openRequest, onGoAgent, onSearch, onReload }) {
+function KnowledgeScreen({ indexState, section, setSection, openRequest, onGoAgent, onSearch, onReload, modules }) {
   const [category, setCategory] = useState("all");
   const [sort, setSort] = useState("number");
   const [history, setHistory] = useState([null]);
@@ -2216,6 +2220,10 @@ function KnowledgeScreen({ indexState, section, setSection, openRequest, onGoAge
   const [readerError, setReaderError] = useState(null);
   const [accountId, setAccountId] = useState(null);
   const [projectId, setProjectId] = useState(null);
+  const categories = useMemo(
+    () => CATEGORIES.filter((item) => item.id !== "benchmarks" || modules.benchmarks),
+    [modules.benchmarks],
+  );
   const indexData = indexState.data;
   const documentById = useMemo(
     () => new Map((indexData?.documents ?? []).map((document) => [document.stableId, document])),
@@ -2225,6 +2233,10 @@ function KnowledgeScreen({ indexState, section, setSection, openRequest, onGoAge
   const currentDocument = currentEntry === null ? null : documentById.get(currentEntry.id);
   const currentAccount = accountId === null ? null : documentById.get(accountId);
   const currentProject = projectId === null ? null : documentById.get(projectId);
+
+  useEffect(() => {
+    if (!modules.benchmarks && category === "benchmarks") setCategory("all");
+  }, [category, modules.benchmarks]);
 
   const navigate = useCallback((target, searchQuery = "", anchor = "") => {
     const entry = target === null ? null : { id: target, searchQuery, anchor };
@@ -2308,12 +2320,12 @@ function KnowledgeScreen({ indexState, section, setSection, openRequest, onGoAge
           />
         )}
         {indexState.phase === "ready" && indexData && !readerError && !currentDocument && !currentAccount && !currentProject && section === "overview" && (
-          <KnowledgeOverview indexData={indexData} onNavigate={handleOverviewTarget} />
+          <KnowledgeOverview indexData={indexData} onNavigate={handleOverviewTarget} modules={modules} />
         )}
         {indexState.phase === "ready" && indexData && !readerError && !currentDocument && !currentAccount && !currentProject && section === "archive" && (
-          <KnowledgeHome indexData={indexData} category={category} setCategory={setCategory} sort={sort} setSort={setSort} onOpen={(id) => navigate(id)} onOpenAccount={(id) => setAccountId(id)} onOpenProject={(id) => setProjectId(id)} />
+          <KnowledgeHome indexData={indexData} category={category} setCategory={setCategory} sort={sort} setSort={setSort} onOpen={(id) => navigate(id)} onOpenAccount={(id) => setAccountId(id)} onOpenProject={(id) => setProjectId(id)} categories={categories} />
         )}
-        {indexState.phase === "ready" && indexData && !readerError && !currentDocument && !currentAccount && !currentProject && section === "graph" && <KnowledgeGraph onOpen={(id) => navigate(id)} />}
+        {indexState.phase === "ready" && indexData && !readerError && !currentDocument && !currentAccount && !currentProject && section === "graph" && <KnowledgeGraph onOpen={(id) => navigate(id)} categories={categories} modules={modules} />}
       </div>
     </section>
   );
@@ -2706,7 +2718,7 @@ function AgentContextSidebar({ project, session, preset, model, messages, onClos
   );
 }
 
-function AgentScreen({ onOpenSettings, openSessionRequest }) {
+function AgentScreen({ onOpenSettings, openSessionRequest, defaultProjectPath }) {
   const desktop = harnessApi.available();
   const [projects, setProjects] = useState([]);
   const projectsRef = useRef(projects);
@@ -2842,17 +2854,19 @@ function AgentScreen({ onOpenSettings, openSessionRequest }) {
     }
     setProjects(nextProjects);
     const selected = nextProjects.flatMap((project) => project.sessions.map((session) => ({ project, session })))
-      .find(({ session }) => session.id === (preferredSessionId || activeSessionRef.current))
-      ?? nextProjects.flatMap((project) => project.sessions.map((session) => ({ project, session })))[0];
+      .find(({ session }) => session.id === (preferredSessionId || activeSessionRef.current));
     if (selected) {
       setActiveProjectId(selected.project.id);
       setActiveSessionId(selected.session.id);
-    } else if (nextProjects[0]) {
-      setActiveProjectId(nextProjects[0].id);
-      setActiveSessionId("");
+    } else {
+      const defaultProject = nextProjects.find((project) => project.path === defaultProjectPath) ?? nextProjects[0];
+      if (defaultProject) {
+        setActiveProjectId(defaultProject.id);
+        setActiveSessionId(defaultProject.sessions[0]?.id ?? "");
+      }
     }
     return nextProjects;
-  }, []);
+  }, [defaultProjectPath]);
 
   const loadSession = useCallback(async (projectId, sessionId) => {
     if (!desktop || !sessionId) return;
@@ -4019,7 +4033,7 @@ function SettingsRow({ icon: Icon, title, description, children }) {
   );
 }
 
-function SettingsScreen() {
+function SettingsScreen({ onboarding, onOnboardingChange }) {
   const desktop = harnessApi.available();
   const [section, setSection] = useState("general");
   const [root, setRoot] = useState("");
@@ -4034,6 +4048,9 @@ function SettingsScreen() {
   const [credentialOpen, setCredentialOpen] = useState(false);
   const [credentialDraft, setCredentialDraft] = useState("");
   const [savingCredential, setSavingCredential] = useState(false);
+  const [moduleBusy, setModuleBusy] = useState("");
+  const [moduleConfirmation, setModuleConfirmation] = useState(null);
+  const [rootConfirmation, setRootConfirmation] = useState(null);
   const currentSection = SETTINGS_SECTIONS.find((item) => item.id === section) ?? SETTINGS_SECTIONS[0];
 
   const loadSettings = useCallback(async () => {
@@ -4100,9 +4117,39 @@ function SettingsScreen() {
   async function chooseKnowledgeRoot() {
     if (!desktop) return;
     try {
-      const result = await globalThis.window.jimu.knowledge.chooseRoot();
-      if (!result.canceled && result.accepted !== false) setRoot(result.root);
-      else if (result.accepted === false) setSettingsError(result.setup?.error ?? "所选目录不兼容。");
+      const result = await globalThis.window.jimu.onboarding.previewExisting({ revision: onboarding.revision });
+      if (result.canceled) return;
+      if (result.accepted === false) {
+        setSettingsError(result.setup?.error ?? "所选目录不兼容。");
+        return;
+      }
+      if (result.requiresConfirmation) {
+        setRootConfirmation(result);
+        return;
+      }
+      const next = await globalThis.window.jimu.onboarding.applyExisting({
+        revision: onboarding.revision,
+        token: result.token,
+        confirmCreate: false,
+      });
+      setRoot(result.root);
+      onOnboardingChange(next);
+    } catch (error) {
+      setSettingsError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function confirmKnowledgeRoot() {
+    if (!rootConfirmation) return;
+    try {
+      const next = await globalThis.window.jimu.onboarding.applyExisting({
+        revision: onboarding.revision,
+        token: rootConfirmation.token,
+        confirmCreate: true,
+      });
+      setRoot(rootConfirmation.root);
+      setRootConfirmation(null);
+      onOnboardingChange(next);
     } catch (error) {
       setSettingsError(error instanceof Error ? error.message : String(error));
     }
@@ -4125,9 +4172,13 @@ function SettingsScreen() {
     if (!desktop || !credentialDraft.trim() || savingCredential) return;
     setSavingCredential(true);
     try {
-      await harnessApi.call("credentials.set", { ref: "DEEPSEEK_API_KEY", value: credentialDraft.trim() });
+      const next = await globalThis.window.jimu.onboarding.testAndSaveDeepSeek({
+        revision: onboarding.revision,
+        apiKey: credentialDraft.trim(),
+      });
       setCredentialDraft("");
       setCredentialOpen(false);
+      onOnboardingChange(next);
       await loadSettings();
     } catch (error) {
       setSettingsError(error instanceof Error ? error.message : String(error));
@@ -4141,9 +4192,37 @@ function SettingsScreen() {
     try {
       await harnessApi.call("credentials.unset", { ref: "DEEPSEEK_API_KEY" });
       setCredentialOpen(false);
+      onOnboardingChange(await globalThis.window.jimu.onboarding.snapshot());
       await loadSettings();
     } catch (error) {
       setSettingsError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function updateModule(id, enabled, confirmCreate = false) {
+    if (!desktop || moduleBusy) return;
+    setModuleBusy(id);
+    setSettingsError(null);
+    try {
+      const modules = {
+        benchmarks: id === "benchmarks" ? enabled : onboarding.modules.benchmarks.enabled,
+        factory: id === "factory" ? enabled : onboarding.modules.factory.enabled,
+      };
+      const next = await globalThis.window.jimu.onboarding.updateModules({
+        revision: onboarding.revision,
+        modules,
+        confirmCreate,
+      });
+      if (next.requiresConfirmation) {
+        setModuleConfirmation({ id, enabled, directories: next.missingModules });
+      } else {
+        setModuleConfirmation(null);
+        onOnboardingChange(next);
+      }
+    } catch (error) {
+      setSettingsError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setModuleBusy("");
     }
   }
 
@@ -4215,7 +4294,52 @@ function SettingsScreen() {
                     <span>{root || "未配置"}</span><CaretDown size={13} weight="bold" />
                   </button>
                 </SettingsRow>
+                <SettingsRow icon={DownloadSimple} title="知识库来源" description="最近一次成功激活的本地来源">
+                  <span className="fixed-value"><Check size={14} weight="bold" />{onboarding.knowledge.source === "github-release" ? "GitHub Release" : onboarding.knowledge.source === "bundled-fallback" ? "安装包内置副本" : onboarding.knowledge.source === "existing" ? "已有知识库" : "本地配置"}</span>
+                </SettingsRow>
+                <SettingsRow icon={UsersThree} title="对标博主库" description="按需扫描 07-对标博主库；关闭不会删除内容">
+                  <button
+                    type="button"
+                    className="settings-module-switch"
+                    role="switch"
+                    aria-label="启用或关闭对标博主库"
+                    aria-checked={onboarding.modules.benchmarks.enabled}
+                    aria-busy={moduleBusy === "benchmarks"}
+                    data-enabled={onboarding.modules.benchmarks.enabled || undefined}
+                    disabled={Boolean(moduleBusy)}
+                    onClick={() => { void updateModule("benchmarks", !onboarding.modules.benchmarks.enabled); }}
+                  >{moduleBusy === "benchmarks" ? (onboarding.modules.benchmarks.enabled ? "正在关闭…" : "正在启用…") : onboarding.modules.benchmarks.enabled ? "已启用" : "已关闭"}</button>
+                </SettingsRow>
+                <SettingsRow icon={Factory} title="自媒体工厂" description="按需启动 08-自媒体工厂；关闭不会删除内容">
+                  <button
+                    type="button"
+                    className="settings-module-switch"
+                    role="switch"
+                    aria-label="启用或关闭自媒体工厂"
+                    aria-checked={onboarding.modules.factory.enabled}
+                    aria-busy={moduleBusy === "factory"}
+                    data-enabled={onboarding.modules.factory.enabled || undefined}
+                    disabled={Boolean(moduleBusy)}
+                    onClick={() => { void updateModule("factory", !onboarding.modules.factory.enabled); }}
+                  >{moduleBusy === "factory" ? (onboarding.modules.factory.enabled ? "正在关闭…" : "正在启用…") : onboarding.modules.factory.enabled ? "已启用" : "已关闭"}</button>
+                </SettingsRow>
               </div>
+              {moduleConfirmation && (
+                <div className="settings-module-confirm">
+                  <ShieldCheck size={18} weight="duotone" />
+                  <span><strong>创建模块所需的空目录？</strong><small>{moduleConfirmation.directories.map((id) => id === "benchmarks" ? "07-对标博主库" : "08-自媒体工厂").join("、")}</small></span>
+                  <button type="button" onClick={() => setModuleConfirmation(null)}>取消</button>
+                  <button type="button" onClick={() => { void updateModule(moduleConfirmation.id, moduleConfirmation.enabled, true); }}>确认创建</button>
+                </div>
+              )}
+              {rootConfirmation && (
+                <div className="settings-module-confirm">
+                  <ShieldCheck size={18} weight="duotone" />
+                  <span><strong>所选知识库缺少已启用模块</strong><small>{rootConfirmation.missingModules.map((id) => id === "benchmarks" ? "07-对标博主库" : "08-自媒体工厂").join("、")}</small></span>
+                  <button type="button" onClick={() => setRootConfirmation(null)}>取消</button>
+                  <button type="button" onClick={() => { void confirmKnowledgeRoot(); }}>创建空目录并连接</button>
+                </div>
+              )}
             </div>
           )}
 
@@ -4291,7 +4415,7 @@ function SettingsScreen() {
   );
 }
 
-export function App() {
+function MainApp({ onboarding, onOnboardingChange }) {
   const [mode, setMode] = useState("knowledge");
   const [appSidebarPreference, setAppSidebarPreference] = useStoredPanelSize(PANEL_LAYOUT.appSidebar);
   const appRef = useRef(null);
@@ -4308,6 +4432,10 @@ export function App() {
   const [openRequest, setOpenRequest] = useState(null);
   const [agentOpenRequest, setAgentOpenRequest] = useState(null);
   const [indexState, setIndexState] = useState({ phase: "loading", data: null, error: null });
+  const modules = {
+    benchmarks: onboarding.modules.benchmarks.enabled,
+    factory: onboarding.modules.factory.enabled,
+  };
 
   const loadKnowledge = useCallback(async () => {
     try {
@@ -4352,6 +4480,10 @@ export function App() {
       unsubscribeSettings?.();
     };
   }, []);
+
+  useEffect(() => {
+    if (!modules.factory && mode === "factory") setMode("knowledge");
+  }, [mode, modules.factory]);
 
   function openSearchResult(document, query) {
     setMode("knowledge");
@@ -4400,6 +4532,7 @@ export function App() {
         setMode={setMode}
         collapsed={sidebarCollapsed}
         onToggleCollapse={toggleSidebar}
+        modules={modules}
         resizeHandle={!sidebarCollapsed ? (
           <PanelResizeHandle
             className="app-sidebar-resizer"
@@ -4425,6 +4558,7 @@ export function App() {
               onGoAgent={() => openAgent()}
               onSearch={() => setSearchOpen(true)}
               onReload={loadKnowledge}
+              modules={modules}
             />
           )}
           {mode === "factory" && indexState.phase !== "ready" && (
@@ -4437,9 +4571,9 @@ export function App() {
               onGoAgent={openAgent}
             />
           )}
-          {mode === "agent" && <AgentScreen onOpenSettings={() => setMode("settings")} openSessionRequest={agentOpenRequest} />}
+          {mode === "agent" && <AgentScreen onOpenSettings={() => setMode("settings")} openSessionRequest={agentOpenRequest} defaultProjectPath={onboarding.knowledge.root} />}
           {mode === "usage" && <UsageScreen harnessApi={harnessApi} onOpenSession={openAgent} />}
-          {mode === "settings" && <SettingsScreen />}
+          {mode === "settings" && <SettingsScreen onboarding={onboarding} onOnboardingChange={onOnboardingChange} />}
         </div>
       </section>
       {searchOpen && indexState.phase === "ready" && indexState.data && (
@@ -4447,4 +4581,53 @@ export function App() {
       )}
     </div>
   );
+}
+
+export function App() {
+  const desktop = Boolean(globalThis.window.jimu?.onboarding);
+  const [onboarding, setOnboarding] = useState(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!desktop) return undefined;
+    let active = true;
+    void globalThis.window.jimu.onboarding.snapshot().then((snapshot) => {
+      if (active) setOnboarding(snapshot);
+    }).catch((caught) => {
+      if (active) setError(caught instanceof Error ? caught.message : String(caught));
+    });
+    const unsubscribe = globalThis.window.jimu.onboarding.subscribe((snapshot) => {
+      if (active) setOnboarding(snapshot);
+    });
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [desktop]);
+
+  if (!desktop) {
+    const preview = {
+      revision: "preview",
+      completed: true,
+      phase: "complete",
+      modules: {
+        benchmarks: { enabled: true, installed: false },
+        factory: { enabled: true, installed: false },
+      },
+      knowledge: { phase: "unconfigured" },
+      credential: { configured: false, writable: false, tested: false },
+    };
+    return <MainApp onboarding={preview} onOnboardingChange={() => {}} />;
+  }
+  if (!onboarding) {
+    return (
+      <main className="onboarding-page onboarding-loading">
+        <span className="index-loader" />
+        <h1>正在启动 JiMu</h1>
+        <p>{error || "正在连接本地 Harness 与知识库服务…"}</p>
+      </main>
+    );
+  }
+  if (!onboarding.completed) return <OnboardingScreen snapshot={onboarding} onChange={setOnboarding} />;
+  return <MainApp onboarding={onboarding} onOnboardingChange={setOnboarding} />;
 }

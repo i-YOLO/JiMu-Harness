@@ -10,6 +10,7 @@ import {
   JIMU_KNOWLEDGE_TEMPLATE_VERSION,
   KNOWLEDGE_CATEGORIES,
   KNOWLEDGE_CATEGORY_IDS,
+  KNOWLEDGE_OPTIONAL_MODULES,
   KNOWLEDGE_STANDARD_DIRECTORIES,
 } from "../shared/knowledge-schema.mjs";
 
@@ -29,6 +30,7 @@ function manifest(schemaVersion = 1) {
     minimumHarnessVersion: "0.1.0",
     repositoryUrl: JIMU_KNOWLEDGE_REPOSITORY_URL,
     categories: KNOWLEDGE_CATEGORY_IDS,
+    optionalModules: KNOWLEDGE_OPTIONAL_MODULES,
   };
 }
 
@@ -73,6 +75,22 @@ test("root inspection rejects malformed, future and incomplete knowledge roots",
   assert.equal((await inspectKnowledgeRoot(incomplete)).phase, "incompatible");
 });
 
+test("optional modules are required only when enabled locally", async (t) => {
+  const root = await fixture(t);
+  await writeFile(path.join(root, "jimu-knowledge.json"), JSON.stringify(manifest()));
+  await rm(path.join(root, "07-对标博主库"), { recursive: true });
+  await rm(path.join(root, "08-自媒体工厂"), { recursive: true });
+  assert.equal((await inspectKnowledgeRoot(root)).phase, "ready");
+  assert.match(
+    (await inspectKnowledgeRoot(root, { requiredModules: ["benchmarks"] })).error,
+    /07-对标博主库/,
+  );
+  assert.match(
+    (await inspectKnowledgeRoot(root, { requiredModules: ["factory"] })).error,
+    /08-自媒体工厂/,
+  );
+});
+
 test("root inspection accepts an assets link contained inside the knowledge root", async (t) => {
   const root = await fixture(t);
   const target = path.join(root, "08-自媒体工厂", "03-素材库", "01-图片与配图", "知识库内容素材");
@@ -114,9 +132,15 @@ test("root inspection rejects escaping, dangling and non-directory standard-dire
 
 test("production renderer sources contain no static user-data fallbacks", async () => {
   const source = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
+  const onboarding = await readFile(new URL("../src/onboarding-screen.jsx", import.meta.url), "utf8");
   const usage = await readFile(new URL("../src/usage-screen.jsx", import.meta.url), "utf8");
-  for (const text of [source, usage]) {
+  for (const text of [source, onboarding, usage]) {
     assert.doesNotMatch(text, /INITIAL_PROJECTS|PREVIEW_SKILLS|DOC_BY_ID|const\s+DOCUMENTS\b/);
     assert.doesNotMatch(text, /\/Users\//);
   }
+  assert.match(onboarding, /使用完整默认配置/);
+  assert.match(onboarding, /返回上一步/);
+  assert.match(onboarding, /点击下方能力卡片即可选择/);
+  assert.match(onboarding, /测试并进入 JiMu/);
+  assert.doesNotMatch(onboarding, /暂时跳过|跳过配置/);
 });

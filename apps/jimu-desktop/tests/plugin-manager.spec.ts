@@ -71,9 +71,9 @@ describe('JiMu plugin policy', () => {
   })
 
   it('rejects overlay rows outside the reviewed toggleable policy', () => {
-    expect(() => validatePluginOverlay(policy(), '- id: web-runtime\n  disabled: false\n')).toThrow(/locked or unknown/)
-    expect(() => validatePluginOverlay(policy(), '- id: tool-web\n  disabled: true\n- id: tool-web\n  disabled: false\n')).toThrow(/duplicate/)
-    expect(() => validatePluginOverlay(policy(), renderPluginOverlay(policy(), { search: false }))).not.toThrow()
+    expect(() => { validatePluginOverlay(policy(), '- id: web-runtime\n  disabled: false\n') }).toThrow(/locked or unknown/)
+    expect(() => { validatePluginOverlay(policy(), '- id: tool-web\n  disabled: true\n- id: tool-web\n  disabled: false\n') }).toThrow(/duplicate/)
+    expect(() => { validatePluginOverlay(policy(), renderPluginOverlay(policy(), { search: false })) }).not.toThrow()
   })
 
   it('atomically replaces the durable overlay', async () => {

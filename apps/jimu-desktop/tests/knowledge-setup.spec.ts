@@ -48,4 +48,18 @@ describe('JiMu starter creation boundary', () => {
     })).rejects.toThrow(/fixture validation failure/)
     expect(await readdir(root)).toEqual(['template'])
   })
+
+  it('omits locally disabled optional directories', async () => {
+    const { root, template } = await fixture()
+    await mkdir(join(template, '07-对标博主库'))
+    await mkdir(join(template, '08-自媒体工厂'))
+    const created = await createStarterDirectory({
+      parent: root,
+      folderName: 'Fixture-Knowledge-Modules',
+      templateRoot: template,
+      excludedDirectories: ['07-对标博主库', '08-自媒体工厂'],
+      inspectRoot: ready,
+    })
+    expect(await readdir(created.target)).toEqual(['jimu-knowledge.json'])
+  })
 })

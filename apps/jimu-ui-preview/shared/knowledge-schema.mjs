@@ -1,5 +1,5 @@
 export const JIMU_KNOWLEDGE_SCHEMA_VERSION = 1;
-export const JIMU_KNOWLEDGE_TEMPLATE_VERSION = "1.0.0";
+export const JIMU_KNOWLEDGE_TEMPLATE_VERSION = "1.0.1";
 export const JIMU_MINIMUM_HARNESS_VERSION = "0.1.0";
 export const JIMU_KNOWLEDGE_REPOSITORY_URL = "https://github.com/i-YOLO/JiMu-Knowledge";
 
@@ -16,6 +16,20 @@ export const KNOWLEDGE_CATEGORIES = Object.freeze([
 
 export const KNOWLEDGE_CATEGORY_IDS = Object.freeze(KNOWLEDGE_CATEGORIES.map((category) => category.id));
 
+export const KNOWLEDGE_OPTIONAL_MODULES = Object.freeze({
+  benchmarks: Object.freeze({
+    directory: "07-对标博主库",
+    category: "benchmarks",
+    defaultEnabled: true,
+  }),
+  factory: Object.freeze({
+    directory: "08-自媒体工厂",
+    defaultEnabled: true,
+  }),
+});
+
+export const KNOWLEDGE_MODULE_IDS = Object.freeze(Object.keys(KNOWLEDGE_OPTIONAL_MODULES));
+
 export const KNOWLEDGE_AUXILIARY_CATEGORIES = Object.freeze([
   { id: "factory", label: "自媒体工厂", directory: "08-自媒体工厂", type: "FactoryRecord", stage: "production", accent: "magenta", eyebrow: "SELF-MEDIA / FACTORY" },
   { id: "system", label: "系统", directory: "00-System", type: "System", stage: "system", accent: "cobalt", eyebrow: "SYSTEM / CONTROL" },
@@ -24,13 +38,19 @@ export const KNOWLEDGE_AUXILIARY_CATEGORIES = Object.freeze([
   { id: "other", label: "其他", directory: "ROOT", type: "Document", stage: "reference", accent: "cobalt", eyebrow: "DOCUMENT / REFERENCE" },
 ]);
 
-export const KNOWLEDGE_STANDARD_DIRECTORIES = Object.freeze([
+export const KNOWLEDGE_CORE_DIRECTORIES = Object.freeze([
   "00-System",
-  ...KNOWLEDGE_CATEGORIES.map((category) => category.directory),
-  "08-自媒体工厂",
+  ...KNOWLEDGE_CATEGORIES
+    .filter((category) => category.id !== "benchmarks")
+    .map((category) => category.directory),
   "90-Archive",
   "99-Logs",
   "assets",
+]);
+
+export const KNOWLEDGE_STANDARD_DIRECTORIES = Object.freeze([
+  ...KNOWLEDGE_CORE_DIRECTORIES,
+  ...KNOWLEDGE_MODULE_IDS.map((id) => KNOWLEDGE_OPTIONAL_MODULES[id].directory),
 ]);
 
 function parseVersion(value) {
@@ -59,5 +79,6 @@ export function validateKnowledgeManifest(value) {
   if (compareVersion(minimumHarnessVersion, currentHarnessVersion) > 0) return { ok: false, error: "知识库需要更高版本的 JiMu Harness。", futureHarness: true };
   if (value.repositoryUrl !== JIMU_KNOWLEDGE_REPOSITORY_URL) return { ok: false, error: "知识库 Manifest 的仓库地址不受支持。" };
   if (JSON.stringify(value.categories) !== JSON.stringify(KNOWLEDGE_CATEGORY_IDS)) return { ok: false, error: "知识库分类与 Schema 1 不一致。" };
+  if (JSON.stringify(value.optionalModules) !== JSON.stringify(KNOWLEDGE_OPTIONAL_MODULES)) return { ok: false, error: "知识库按需模块与 Schema 1 不一致。" };
   return { ok: true, manifest: value };
 }

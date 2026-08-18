@@ -6,6 +6,7 @@ import {
   JIMU_KNOWLEDGE_REPOSITORY_URL,
   JIMU_KNOWLEDGE_TEMPLATE_VERSION,
   KNOWLEDGE_CATEGORIES,
+  KNOWLEDGE_OPTIONAL_MODULES,
   KNOWLEDGE_STANDARD_DIRECTORIES,
 } from "../../jimu-ui-preview/shared/knowledge-schema.mjs";
 
@@ -20,6 +21,7 @@ export async function createKnowledgeFixture(prefix = "jimu-knowledge-fixture-")
     minimumHarnessVersion: "0.1.0",
     repositoryUrl: JIMU_KNOWLEDGE_REPOSITORY_URL,
     categories: KNOWLEDGE_CATEGORIES.map((category) => category.id),
+    optionalModules: KNOWLEDGE_OPTIONAL_MODULES,
   }, null, 2)}\n`, { mode: 0o600 });
   return { container, root };
 }

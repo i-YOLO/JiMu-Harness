@@ -1,8 +1,8 @@
 {
   "repositoryUrl": "https://github.com/i-YOLO/JiMu-Knowledge",
-  "releaseTag": "v1.0.0",
-  "assetUrl": "https://github.com/i-YOLO/JiMu-Knowledge/releases/download/v1.0.0/jimu-knowledge-1.0.0.zip",
-  "sha256": "24e8419f8865a0c742b307e0d8eabd45dbf85f1843c1cc4199a2c7eb92a5c288",
+  "releaseTag": "v1.0.1",
+  "assetUrl": "https://github.com/i-YOLO/JiMu-Knowledge/releases/download/v1.0.1/jimu-knowledge-1.0.1.zip",
+  "sha256": "dbd87c624981d16b39163cfa6fc87e62b6973684b090d3ef1988a158accc4512",
   "schemaVersion": 1,
-  "templateVersion": "1.0.0"
+  "templateVersion": "1.0.1"
 }

@@ -15,7 +15,7 @@
     "start": "electron .",
     "pack:mac": "pnpm run prepare:knowledge-template:release && pnpm run build && electron-builder --mac dir --arm64",
     "dist:mac": "pnpm run prepare:knowledge-template:release && pnpm run build && electron-builder --mac dmg --arm64",
-    "test": "vitest run tests/plugin-manager.spec.ts tests/knowledge-setup.spec.ts",
+    "test": "vitest run tests/plugin-manager.spec.ts tests/knowledge-setup.spec.ts tests/knowledge-installer.spec.ts",
     "test:e2e": "node --test --test-concurrency=1 tests/*.e2e.test.mjs",
     "test:packaged": "node scripts/smoke-packaged.mjs",
     "test:security": "node --test tests/security.test.mjs"
@@ -63,7 +63,7 @@
     "appId": "com.iyolo.jimu",
     "productName": "JiMu",
     "electronDist": "node_modules/electron/dist",
-    "artifactName": "JiMu-${version}-arm64.${ext}",
+    "artifactName": "JiMu-${version}-macOS-arm64.${ext}",
     "asar": false,
     "directories": {
       "output": "release"

@@ -1,4 +1,5 @@
 import { createReadStream, createWriteStream, readFileSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import { lstat, mkdir, readFile, readdir, realpath, rename, stat, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { Readable } from 'node:stream'
@@ -42,6 +43,14 @@ import {
   type PluginPolicy,
 } from './plugin-manager.ts'
 import { createStarterDirectory, parseStarterFolderName } from './knowledge-setup.ts'
+import {
+  KNOWLEDGE_MODULE_DIRECTORIES,
+  installKnowledgeDirectory,
+  installMissingKnowledgeModules,
+  readKnowledgeTemplateLock,
+  type KnowledgeModuleId,
+  type KnowledgeModuleSelection,
+} from './knowledge-installer.ts'
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'jimu-app', privileges: { standard: true, secure: true, supportFetchAPI: true } },
@@ -76,8 +85,9 @@ interface KnowledgeModule {
     indexPath: string
     databasePath: string
     useWorker: boolean
+    excludedDirectories?: string[]
   }) => KnowledgeService
-  inspectKnowledgeRoot(root: string): Promise<KnowledgeRootInspection>
+  inspectKnowledgeRoot(root: string, options?: { requiredModules?: KnowledgeModuleId[] }): Promise<KnowledgeRootInspection>
 }
 
 type KnowledgeSetupPhase = 'unconfigured' | 'initializing' | 'ready' | 'missing' | 'incompatible' | 'error'
@@ -90,6 +100,11 @@ interface JimuKnowledgeManifest {
   minimumHarnessVersion: string
   repositoryUrl: string
   categories: string[]
+  optionalModules: Record<KnowledgeModuleId, {
+    directory: string
+    category?: string
+    defaultEnabled: true
+  }>
 }
 
 interface KnowledgeRootInspection {
@@ -106,6 +121,42 @@ interface KnowledgeSetupSnapshot extends KnowledgeRootInspection {
     templateVersion: string
     bundled: boolean
   }
+}
+
+interface DesktopSettings {
+  onboardingVersion?: 1
+  knowledgeRoot?: string
+  knowledgeModules?: KnowledgeModuleSelection
+  knowledgeSource?: 'github-release' | 'bundled-fallback' | 'existing'
+  deepSeekTested?: boolean
+}
+
+type OnboardingPhase = 'features' | 'knowledge' | 'credential' | 'testing' | 'complete' | 'error'
+
+interface JimuOnboardingSnapshot {
+  revision: string
+  completed: boolean
+  phase: OnboardingPhase
+  modules: Record<KnowledgeModuleId, { enabled: boolean; installed: boolean }>
+  knowledge: {
+    phase: KnowledgeSetupPhase | 'downloading' | 'verifying' | 'installing' | 'indexing'
+    root?: string
+    source?: 'github-release' | 'bundled-fallback' | 'existing'
+    progress?: number
+    error?: string
+  }
+  credential: {
+    configured: boolean
+    writable: boolean
+    source?: string
+    tested: boolean
+    error?: string
+  }
+}
+
+interface KnowledgeModulesUpdateResult extends JimuOnboardingSnapshot {
+  requiresConfirmation?: boolean
+  missingModules?: KnowledgeModuleId[]
 }
 
 interface FactoryService {
@@ -142,7 +193,7 @@ interface HarnessRuntime {
 
 const APP_ID = 'com.iyolo.jimu'
 const KNOWLEDGE_REPOSITORY_URL = 'https://github.com/i-YOLO/JiMu-Knowledge'
-const KNOWLEDGE_TEMPLATE_VERSION = '1.0.0'
+const KNOWLEDGE_TEMPLATE_VERSION = '1.0.1'
 const ALLOWED_EXTERNAL_PROTOCOLS = new Set(['https:', 'http:', 'mailto:'])
 const JIMU_ASSET_MIME: Record<string, string> = {
   '.avif': 'image/avif',
@@ -196,6 +247,13 @@ const IPC_HANDLER_CHANNELS = [
   'jimu:harness:respond',
   'jimu:harness:choose-project',
   'jimu:harness:export-session',
+  'jimu:onboarding:snapshot',
+  'jimu:onboarding:set-modules',
+  'jimu:onboarding:install-default',
+  'jimu:onboarding:preview-existing',
+  'jimu:onboarding:apply-existing',
+  'jimu:onboarding:test-deepseek',
+  'jimu:onboarding:update-modules',
   'jimu:plugins:snapshot',
   'jimu:plugins:apply-toggles',
   'jimu:plugins:restart',
@@ -452,6 +510,17 @@ let pluginPolicy: PluginPolicy | null = null
 let lastPluginInventory: PluginInventoryEntry[] = []
 let harnessRestarting = false
 let pluginOperationPending = false
+let desktopSettingsRevision = 0
+let onboardingOperation: JimuOnboardingSnapshot['knowledge'] | null = null
+let onboardingCredentialError: string | undefined
+let onboardingTesting = false
+let onboardingNotificationGeneration = 0
+let pendingExistingKnowledge: {
+  token: string
+  root: string
+  inspection: KnowledgeRootInspection
+  missingModules: KnowledgeModuleId[]
+} | null = null
 let cleanupStarted = false
 let cleanupFinished = false
 let windowCreationReady = false
@@ -540,6 +609,7 @@ async function setKnowledgeSetup(next: KnowledgeRootInspection): Promise<Knowled
   knowledgeSetup = projectKnowledgeSetup(next)
   knowledgeSetup.template.bundled = await pathExists(join(knowledgeTemplateDirectory(), 'jimu-knowledge.json'))
   mainWindow?.webContents.send('jimu:knowledge:changed', { setup: knowledgeSetup })
+  notifyOnboarding()
   return knowledgeSetup
 }
 
@@ -551,12 +621,28 @@ function assertTrustedEvent(event: IpcMainInvokeEvent | IpcMainEvent): void {
   if (source.protocol !== 'jimu-app:') throw new Error('JiMu rejected an IPC request from an invalid origin')
 }
 
-async function readSettings(): Promise<{ knowledgeRoot?: string }> {
+function parseKnowledgeModules(value: unknown): KnowledgeModuleSelection | undefined {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const record = value as JsonRecord
+  if (typeof record.benchmarks !== 'boolean' || typeof record.factory !== 'boolean') return undefined
+  return { benchmarks: record.benchmarks, factory: record.factory }
+}
+
+async function readSettings(): Promise<DesktopSettings> {
   try {
     const value = JSON.parse(await readFile(configPath, 'utf8')) as unknown
     if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
-      const knowledgeRoot = (value as JsonRecord).knowledgeRoot
-      return typeof knowledgeRoot === 'string' ? { knowledgeRoot } : {}
+      const record = value as JsonRecord
+      const settings: DesktopSettings = {}
+      if (record.onboardingVersion === 1) settings.onboardingVersion = 1
+      if (typeof record.knowledgeRoot === 'string') settings.knowledgeRoot = record.knowledgeRoot
+      const modules = parseKnowledgeModules(record.knowledgeModules)
+      if (modules) settings.knowledgeModules = modules
+      if (record.knowledgeSource === 'github-release' || record.knowledgeSource === 'bundled-fallback' || record.knowledgeSource === 'existing') {
+        settings.knowledgeSource = record.knowledgeSource
+      }
+      if (record.deepSeekTested === true) settings.deepSeekTested = true
+      return settings
     }
   } catch (error) {
     if (!(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')) throw error
@@ -564,11 +650,22 @@ async function readSettings(): Promise<{ knowledgeRoot?: string }> {
   return {}
 }
 
-async function writeSettings(settings: { knowledgeRoot: string }): Promise<void> {
+async function writeSettings(settings: DesktopSettings): Promise<void> {
   await mkdir(dirname(configPath), { recursive: true })
   const temporary = `${configPath}.${process.pid}.tmp`
   await writeFile(temporary, `${JSON.stringify(settings, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 })
   await rename(temporary, configPath)
+  desktopSettingsRevision += 1
+}
+
+async function updateSettings(patch: Partial<DesktopSettings>): Promise<DesktopSettings> {
+  const settings = { ...await readSettings(), ...patch }
+  await writeSettings(settings)
+  return settings
+}
+
+function assertSettingsRevision(value: unknown): void {
+  if (value !== String(desktopSettingsRevision)) throw new Error('JiMu 设置已变化，请刷新后重试')
 }
 
 function knowledgeModulePath(): string {
@@ -601,19 +698,38 @@ async function loadFactoryModule(): Promise<FactoryModule> {
   return await import(pathToFileURL(factoryModulePath()).href) as FactoryModule
 }
 
-async function replaceKnowledgeService(root: string): Promise<KnowledgeService> {
-  const [module, factoryModule] = await Promise.all([loadKnowledgeModule(), loadFactoryModule()])
+function selectedKnowledgeModules(settings: DesktopSettings): KnowledgeModuleSelection {
+  return settings.knowledgeModules ?? { benchmarks: true, factory: true }
+}
+
+function requiredKnowledgeModules(selection: KnowledgeModuleSelection): KnowledgeModuleId[] {
+  return (Object.keys(selection) as KnowledgeModuleId[]).filter(id => selection[id])
+}
+
+function excludedKnowledgeDirectories(selection: KnowledgeModuleSelection): string[] {
+  return (Object.keys(selection) as KnowledgeModuleId[])
+    .filter(id => !selection[id])
+    .map(id => KNOWLEDGE_MODULE_DIRECTORIES[id])
+}
+
+async function replaceKnowledgeService(root: string, selection: KnowledgeModuleSelection): Promise<KnowledgeService> {
+  const module = await loadKnowledgeModule()
   const next = new module.KnowledgeIndexService({
     root,
     indexPath: knowledgeIndexPath,
     databasePath: knowledgeDatabasePath,
     useWorker: true,
+    excludedDirectories: excludedKnowledgeDirectories(selection),
   })
-  const nextFactory = new factoryModule.FactoryService({ root })
   await next.initialize({ backgroundCalibration: true })
-  await nextFactory.initialize()
   next.startWatching()
-  nextFactory.startWatching()
+  let nextFactory: FactoryService | null = null
+  if (selection.factory) {
+    const factoryModule = await loadFactoryModule()
+    nextFactory = new factoryModule.FactoryService({ root })
+    await nextFactory.initialize()
+    nextFactory.startWatching()
+  }
   unsubscribeKnowledge?.()
   unsubscribeFactory?.()
   knowledge?.close()
@@ -625,29 +741,32 @@ async function replaceKnowledgeService(root: string): Promise<KnowledgeService> 
       indexedAt: (next.getClientSnapshot() as JsonRecord).indexedAt,
     })
   })
-  unsubscribeFactory = nextFactory.subscribe((snapshot) => {
+  unsubscribeFactory = nextFactory?.subscribe((snapshot) => {
     const value = snapshot as JsonRecord
     mainWindow?.webContents.send('jimu:factory:changed', { generatedAt: value.generatedAt })
-  })
+  }) ?? null
   return next
 }
 
 async function initializeKnowledge(): Promise<void> {
   const module = await loadKnowledgeModule()
   const settings = await readSettings()
+  const selection = selectedKnowledgeModules(settings)
   const configuredRoot = settings.knowledgeRoot ?? process.env.JIMU_KNOWLEDGE_ROOT
   if (!configuredRoot) {
     await setKnowledgeSetup({ phase: 'unconfigured' })
     return
   }
-  const inspection = await module.inspectKnowledgeRoot(configuredRoot)
+  const inspection = await module.inspectKnowledgeRoot(configuredRoot, {
+    requiredModules: requiredKnowledgeModules(selection),
+  })
   if (inspection.phase !== 'ready' || !inspection.root) {
     await setKnowledgeSetup(inspection)
     return
   }
   await setKnowledgeSetup({ ...inspection, phase: 'initializing' })
   try {
-    await replaceKnowledgeService(inspection.root)
+    await replaceKnowledgeService(inspection.root, selection)
     await setKnowledgeSetup(inspection)
   } catch (error) {
     const failedSetup: KnowledgeRootInspection = {
@@ -661,20 +780,30 @@ async function initializeKnowledge(): Promise<void> {
   }
 }
 
-async function activateKnowledgeRoot(inspection: KnowledgeRootInspection): Promise<KnowledgeSetupSnapshot> {
+async function activateKnowledgeRoot(
+  inspection: KnowledgeRootInspection,
+  selection: KnowledgeModuleSelection,
+  source?: DesktopSettings['knowledgeSource'],
+): Promise<KnowledgeSetupSnapshot> {
   if (inspection.phase !== 'ready' || !inspection.root || !inspection.compatibility) {
     throw new Error(inspection.error ?? 'Knowledge directory is incompatible')
   }
   const previousSetup = knowledgeSetup
   await setKnowledgeSetup({ ...inspection, phase: 'initializing' })
   try {
-    await replaceKnowledgeService(inspection.root)
-    await writeSettings({ knowledgeRoot: inspection.root })
+    await replaceKnowledgeService(inspection.root, selection)
+    if (harnessRuntime !== null) await registerKnowledgeWorkspace(harnessRuntime.client, inspection.root)
+    await updateSettings({
+      knowledgeRoot: inspection.root,
+      knowledgeModules: selection,
+      ...(source ? { knowledgeSource: source } : {}),
+    })
     return await setKnowledgeSetup(inspection)
   } catch (error) {
     if (previousSetup.phase === 'ready' && previousSetup.root) {
       try {
-        await replaceKnowledgeService(previousSetup.root)
+        const previousSettings = await readSettings()
+        await replaceKnowledgeService(previousSetup.root, selectedKnowledgeModules(previousSettings))
         knowledgeSetup = previousSetup
         mainWindow?.webContents.send('jimu:knowledge:changed', { setup: knowledgeSetup })
       } catch (rollbackError) {
@@ -701,14 +830,279 @@ async function createKnowledgeStarter(request: unknown): Promise<unknown> {
 
   const templateRoot = knowledgeTemplateDirectory()
   const module = await loadKnowledgeModule()
+  const settings = await readSettings()
+  const modules = selectedKnowledgeModules(settings)
   const created = await createStarterDirectory({
     parent: selection.filePaths[0],
     folderName,
     templateRoot,
-    inspectRoot: root => module.inspectKnowledgeRoot(root),
+    excludedDirectories: excludedKnowledgeDirectories(modules),
+    inspectRoot: root => module.inspectKnowledgeRoot(root, { requiredModules: requiredKnowledgeModules(modules) }),
   })
-  const setup = await activateKnowledgeRoot(created.inspection as KnowledgeRootInspection)
+  const setup = await activateKnowledgeRoot(created.inspection as KnowledgeRootInspection, modules, 'bundled-fallback')
   return { canceled: false, created: true, root: created.target, setup }
+}
+
+function defaultKnowledgeTarget(): string {
+  if (app.isPackaged) return join(homedir(), 'JiMu-Knowledge')
+  const repositoryRoot = resolve(app.getAppPath(), '..', '..')
+  return join(dirname(repositoryRoot), 'JiMu-Knowledge')
+}
+
+async function credentialSnapshot(): Promise<JimuOnboardingSnapshot['credential']> {
+  if (harnessRuntime === null || harnessState.phase !== 'ready') {
+    return {
+      configured: false,
+      writable: false,
+      tested: false,
+      ...(harnessState.error ? { error: harnessState.error } : {}),
+    }
+  }
+  try {
+    const value = unwrapResponse(await harnessRuntime.client.credentials.describe({ refs: ['DEEPSEEK_API_KEY'] })) as JsonRecord
+    const credentials = value.credentials
+    const view = credentials && typeof credentials === 'object' && !Array.isArray(credentials)
+      ? (credentials as JsonRecord).DEEPSEEK_API_KEY
+      : undefined
+    const record = view && typeof view === 'object' && !Array.isArray(view) ? view as JsonRecord : {}
+    const settings = await readSettings()
+    return {
+      configured: record.configured === true,
+      writable: record.writable === true,
+      ...(typeof record.source === 'string' ? { source: record.source } : {}),
+      tested: settings.deepSeekTested === true,
+      ...(onboardingCredentialError ? { error: onboardingCredentialError } : {}),
+    }
+  } catch (error) {
+    return { configured: false, writable: false, tested: false, error: redactDiagnostic(formatError(error)) }
+  }
+}
+
+async function onboardingSnapshot(): Promise<JimuOnboardingSnapshot> {
+  const settings = await readSettings()
+  const completed = settings.onboardingVersion === 1
+  const selection = selectedKnowledgeModules(settings)
+  const root = knowledgeSetup.root
+  const installed = async (id: KnowledgeModuleId): Promise<boolean> => (
+    root !== undefined && await pathExists(join(root, KNOWLEDGE_MODULE_DIRECTORIES[id]))
+  )
+  const [credential, benchmarksInstalled, factoryInstalled] = await Promise.all([
+    credentialSnapshot(),
+    installed('benchmarks'),
+    installed('factory'),
+  ])
+  let phase: OnboardingPhase
+  if (completed) phase = 'complete'
+  else if (onboardingTesting) phase = 'testing'
+  else if (settings.knowledgeModules === undefined) phase = 'features'
+  else if (knowledgeSetup.phase !== 'ready') phase = 'knowledge'
+  else phase = 'credential'
+  return {
+    revision: String(desktopSettingsRevision),
+    completed,
+    phase,
+    modules: {
+      benchmarks: { enabled: selection.benchmarks, installed: benchmarksInstalled },
+      factory: { enabled: selection.factory, installed: factoryInstalled },
+    },
+    knowledge: onboardingOperation ?? {
+      phase: knowledgeSetup.phase,
+      ...(knowledgeSetup.root
+        ? { root: knowledgeSetup.root }
+        : settings.knowledgeModules ? { root: defaultKnowledgeTarget() } : {}),
+      ...(settings.knowledgeSource ? { source: settings.knowledgeSource } : {}),
+      ...(knowledgeSetup.error ? { error: knowledgeSetup.error } : {}),
+    },
+    credential,
+  }
+}
+
+function notifyOnboarding(): void {
+  const generation = ++onboardingNotificationGeneration
+  void onboardingSnapshot().then((snapshot) => {
+    if (generation !== onboardingNotificationGeneration) return
+    mainWindow?.webContents.send('jimu:onboarding:changed', snapshot)
+  }).catch(() => {
+    // A closing window does not need a final onboarding projection.
+  })
+}
+
+async function setOnboardingModules(request: unknown): Promise<JimuOnboardingSnapshot> {
+  const payload = asRecord(request)
+  assertSettingsRevision(payload.revision)
+  const modules = parseKnowledgeModules(payload.modules)
+  if (!modules) throw new Error('知识库模块选择无效')
+  await updateSettings({ knowledgeModules: modules, deepSeekTested: false })
+  onboardingCredentialError = undefined
+  notifyOnboarding()
+  return await onboardingSnapshot()
+}
+
+async function installDefaultKnowledge(request: unknown): Promise<JimuOnboardingSnapshot> {
+  const payload = asRecord(request)
+  assertSettingsRevision(payload.revision)
+  const settings = await readSettings()
+  if (!settings.knowledgeModules) throw new Error('请先选择需要的知识库能力')
+  const selection = settings.knowledgeModules
+  const target = defaultKnowledgeTarget()
+  const module = await loadKnowledgeModule()
+  if (await pathExists(target)) {
+    const existing = await module.inspectKnowledgeRoot(target, { requiredModules: requiredKnowledgeModules(selection) })
+    if (existing.phase !== 'ready') throw new Error('默认目录已存在，但不是兼容的 JiMu 知识库；请改用“选择已有知识库”')
+    await activateKnowledgeRoot(existing, selection, 'existing')
+    notifyOnboarding()
+    return await onboardingSnapshot()
+  }
+
+  const lock = await readKnowledgeTemplateLock(join(app.getAppPath(), 'config', 'knowledge-template-lock.json'))
+  try {
+    const installed = await installKnowledgeDirectory({
+      target,
+      templateRoot: knowledgeTemplateDirectory(),
+      assetUrl: lock.assetUrl,
+      sha256: lock.sha256,
+      selection,
+      download: async url => await net.fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(30_000) }),
+      validate: async (root) => {
+        const inspection = await module.inspectKnowledgeRoot(root, { requiredModules: requiredKnowledgeModules(selection) })
+        if (inspection.phase !== 'ready') throw new Error(inspection.error ?? '知识库模板校验失败')
+      },
+      onProgress: (phase, progress) => {
+        onboardingOperation = { phase, root: target, progress }
+        notifyOnboarding()
+      },
+    })
+    onboardingOperation = { phase: 'indexing', root: target, source: installed.source, progress: 88 }
+    notifyOnboarding()
+    const inspection = await module.inspectKnowledgeRoot(target, { requiredModules: requiredKnowledgeModules(selection) })
+    if (inspection.phase !== 'ready') throw new Error(inspection.error ?? '安装后的知识库校验失败')
+    await activateKnowledgeRoot(inspection, selection, installed.source)
+    onboardingOperation = null
+    notifyOnboarding()
+    return await onboardingSnapshot()
+  } catch (error) {
+    onboardingOperation = { phase: 'error', root: target, error: redactDiagnostic(formatError(error)) }
+    notifyOnboarding()
+    throw error
+  }
+}
+
+async function previewExistingKnowledge(request: unknown): Promise<unknown> {
+  const payload = asRecord(request)
+  assertSettingsRevision(payload.revision)
+  const owner = mainWindow
+  if (owner === null) throw new Error('JiMu window is unavailable')
+  const result = await dialog.showOpenDialog(owner, {
+    title: '选择 JiMu 知识库',
+    buttonLabel: '检查此知识库',
+    properties: ['openDirectory', 'createDirectory'],
+  })
+  if (result.canceled || result.filePaths[0] === undefined) return { canceled: true }
+  const root = await realpath(result.filePaths[0])
+  const module = await loadKnowledgeModule()
+  const inspection = await module.inspectKnowledgeRoot(root)
+  if (inspection.phase !== 'ready') return { canceled: false, accepted: false, setup: projectKnowledgeSetup(inspection) }
+  const selection = selectedKnowledgeModules(await readSettings())
+  const missingModules: KnowledgeModuleId[] = []
+  for (const id of requiredKnowledgeModules(selection)) {
+    if (!await pathExists(join(root, KNOWLEDGE_MODULE_DIRECTORIES[id]))) missingModules.push(id)
+  }
+  const token = randomUUID()
+  pendingExistingKnowledge = { token, root, inspection, missingModules }
+  return {
+    canceled: false,
+    accepted: true,
+    token,
+    root,
+    missingModules,
+    requiresConfirmation: missingModules.length > 0,
+  }
+}
+
+async function applyExistingKnowledge(request: unknown): Promise<JimuOnboardingSnapshot> {
+  const payload = asRecord(request)
+  assertSettingsRevision(payload.revision)
+  const pending = pendingExistingKnowledge
+  if (pending === null || payload.token !== pending.token) throw new Error('所选知识库已过期，请重新选择')
+  if (pending.missingModules.length > 0 && payload.confirmCreate !== true) throw new Error('需要确认创建所选模块的空目录')
+  const settings = await readSettings()
+  const selection = selectedKnowledgeModules(settings)
+  if (pending.missingModules.length > 0) {
+    await installMissingKnowledgeModules({
+      root: pending.root,
+      templateRoot: knowledgeTemplateDirectory(),
+      modules: pending.missingModules,
+    })
+  }
+  const module = await loadKnowledgeModule()
+  const inspection = await module.inspectKnowledgeRoot(pending.root, { requiredModules: requiredKnowledgeModules(selection) })
+  if (inspection.phase !== 'ready') throw new Error(inspection.error ?? '所选知识库不兼容')
+  await activateKnowledgeRoot(inspection, selection, 'existing')
+  pendingExistingKnowledge = null
+  notifyOnboarding()
+  return await onboardingSnapshot()
+}
+
+async function updateKnowledgeModules(request: unknown): Promise<KnowledgeModulesUpdateResult> {
+  const payload = asRecord(request)
+  assertSettingsRevision(payload.revision)
+  const modules = parseKnowledgeModules(payload.modules)
+  if (!modules) throw new Error('知识库模块选择无效')
+  const settings = await readSettings()
+  const activeRoot = settings.knowledgeRoot ?? knowledgeSetup.root
+  if (!activeRoot || knowledgeSetup.phase !== 'ready') throw new Error('知识库尚未准备好')
+  const missing: KnowledgeModuleId[] = []
+  for (const id of requiredKnowledgeModules(modules)) {
+    if (!await pathExists(join(activeRoot, KNOWLEDGE_MODULE_DIRECTORIES[id]))) missing.push(id)
+  }
+  if (missing.length > 0 && payload.confirmCreate !== true) {
+    return {
+      ...await onboardingSnapshot(),
+      requiresConfirmation: true,
+      missingModules: missing,
+    }
+  }
+  if (missing.length > 0) {
+    await installMissingKnowledgeModules({ root: activeRoot, templateRoot: knowledgeTemplateDirectory(), modules: missing })
+  }
+  const module = await loadKnowledgeModule()
+  const inspection = await module.inspectKnowledgeRoot(activeRoot, { requiredModules: requiredKnowledgeModules(modules) })
+  if (inspection.phase !== 'ready') throw new Error(inspection.error ?? '知识库模块校验失败')
+  await activateKnowledgeRoot(inspection, modules, settings.knowledgeSource)
+  notifyOnboarding()
+  return await onboardingSnapshot()
+}
+
+async function testAndSaveDeepSeek(request: unknown): Promise<JimuOnboardingSnapshot> {
+  const payload = asRecord(request)
+  assertSettingsRevision(payload.revision)
+  if (harnessRuntime === null || harnessState.phase !== 'ready') throw new Error('Harness 尚未准备好')
+  const apiKey = typeof payload.apiKey === 'string' ? payload.apiKey.trim() : ''
+  const before = await credentialSnapshot()
+  if (!apiKey && !before.configured) throw new Error('请输入 DeepSeek API Key')
+  onboardingTesting = true
+  onboardingCredentialError = undefined
+  notifyOnboarding()
+  try {
+    const discovered = unwrapResponse(await harnessRuntime.client.llm.discoverModels({
+      settingsNs: 'llm-deepseek',
+      provider: 'deepseek-official',
+      ...(apiKey ? { apiKey } : {}),
+    })) as JsonRecord
+    if (!Array.isArray(discovered.models) || discovered.models.length === 0) throw new Error('DeepSeek 账户没有返回可用模型')
+    if (apiKey) {
+      unwrapResponse(await harnessRuntime.client.credentials.set({ ref: 'DEEPSEEK_API_KEY', value: apiKey }))
+    }
+    await updateSettings({ onboardingVersion: 1, deepSeekTested: true })
+    onboardingTesting = false
+    notifyOnboarding()
+    return await onboardingSnapshot()
+  } catch (error) {
+    onboardingTesting = false
+    onboardingCredentialError = redactDiagnostic(error instanceof Error ? error.message : String(error))
+    notifyOnboarding()
+    throw error
+  }
 }
 
 function unwrapResponse(response: unknown): unknown {
@@ -759,12 +1153,14 @@ function harnessCalls(client: IApiClient): Readonly<Record<string, HarnessCall>>
     'credentials.unset': payload => client.credentials.unset(payload as Parameters<IApiClient['credentials']['unset']>[0]),
     'llm.providers': payload => client.llm.providers(payload),
     'llm.models': payload => client.llm.models(payload),
+    'llm.discoverModels': payload => client.llm.discoverModels(payload as Parameters<IApiClient['llm']['discoverModels']>[0]),
   }
 }
 
 function notifyHarnessState(): void {
   mainWindow?.webContents.send('jimu:harness:changed', harnessState)
   mainWindow?.webContents.send('jimu:plugins:changed', { phase: harnessState.phase })
+  notifyOnboarding()
 }
 
 async function ensurePluginManagementFiles(): Promise<void> {
@@ -777,6 +1173,10 @@ async function ensurePluginManagementFiles(): Promise<void> {
     // A user-controlled file can never escape the reviewed policy boundary.
     await writePluginOverlay(pluginOverlayPath, '[]\n')
   }
+}
+
+async function registerKnowledgeWorkspace(client: IApiClient, root: string): Promise<void> {
+  unwrapResponse(await client.workspace.create({ path: root }))
 }
 
 async function startHarnessRuntime(): Promise<HarnessRuntime> {
@@ -798,7 +1198,7 @@ async function startHarnessRuntime(): Promise<HarnessRuntime> {
   const apiProxy = ctx.apiProxy
   const client = new InProcessApiClient(toFetchHandler(apiProxy))
   const root = knowledge?.root
-  if (root !== null && root !== undefined) unwrapResponse(await client.workspace.create({ path: root }))
+  if (root !== null && root !== undefined) await registerKnowledgeWorkspace(client, root)
   const inventoryService = (ctx.get as unknown as (name: string) => unknown)('pluginInventory') as { list(): { entries: PluginInventoryEntry[] } } | undefined
   if (inventoryService === undefined) {
     await shutdown.shutdown(1)
@@ -1023,6 +1423,34 @@ function installMenu(): void {
 }
 
 function registerIpcHandlers(): void {
+  ipcMain.handle('jimu:onboarding:snapshot', async (event) => {
+    assertTrustedEvent(event)
+    return await onboardingSnapshot()
+  })
+  ipcMain.handle('jimu:onboarding:set-modules', async (event, request: unknown) => {
+    assertTrustedEvent(event)
+    return await setOnboardingModules(request)
+  })
+  ipcMain.handle('jimu:onboarding:install-default', async (event, request: unknown) => {
+    assertTrustedEvent(event)
+    return await installDefaultKnowledge(request)
+  })
+  ipcMain.handle('jimu:onboarding:preview-existing', async (event, request: unknown) => {
+    assertTrustedEvent(event)
+    return await previewExistingKnowledge(request)
+  })
+  ipcMain.handle('jimu:onboarding:apply-existing', async (event, request: unknown) => {
+    assertTrustedEvent(event)
+    return await applyExistingKnowledge(request)
+  })
+  ipcMain.handle('jimu:onboarding:test-deepseek', async (event, request: unknown) => {
+    assertTrustedEvent(event)
+    return await testAndSaveDeepSeek(request)
+  })
+  ipcMain.handle('jimu:onboarding:update-modules', async (event, request: unknown) => {
+    assertTrustedEvent(event)
+    return await updateKnowledgeModules(request)
+  })
   ipcMain.handle('jimu:knowledge:get-setup', async (event) => {
     assertTrustedEvent(event)
     knowledgeSetup.template.bundled = await pathExists(join(knowledgeTemplateDirectory(), 'jimu-knowledge.json'))
@@ -1074,64 +1502,66 @@ function registerIpcHandlers(): void {
     if (result.canceled || result.filePaths[0] === undefined) return { canceled: true }
     const root = await realpath(result.filePaths[0])
     const module = await loadKnowledgeModule()
-    const inspection = await module.inspectKnowledgeRoot(root)
+    const settings = await readSettings()
+    const modules = selectedKnowledgeModules(settings)
+    const inspection = await module.inspectKnowledgeRoot(root, { requiredModules: requiredKnowledgeModules(modules) })
     if (inspection.phase !== 'ready') return { canceled: false, accepted: false, setup: projectKnowledgeSetup(inspection) }
-    const setup = await activateKnowledgeRoot(inspection)
+    const setup = await activateKnowledgeRoot(inspection, modules, 'existing')
     return { canceled: false, accepted: true, root, setup, snapshot: knowledge?.getClientSnapshot() }
   })
   ipcMain.handle('jimu:factory:snapshot', (event) => {
     assertTrustedEvent(event)
-    if (factory === null) throw new Error('Self-media factory is not ready')
+    if (factory === null) throw new Error('module-disabled: 自媒体工厂未启用或尚未准备好')
     return factory.getSnapshot()
   })
   ipcMain.handle('jimu:factory:list-assets', (event, request: unknown) => {
     assertTrustedEvent(event)
-    if (factory === null) throw new Error('Self-media factory is not ready')
+    if (factory === null) throw new Error('module-disabled: 自媒体工厂未启用或尚未准备好')
     return factory.listAssets(request)
   })
   ipcMain.handle('jimu:factory:create-inspiration', async (event, request: unknown) => {
     assertTrustedEvent(event)
-    if (factory === null) throw new Error('Self-media factory is not ready')
+    if (factory === null) throw new Error('module-disabled: 自媒体工厂未启用或尚未准备好')
     return await factory.createInspiration(request)
   })
   ipcMain.handle('jimu:factory:promote-topic', async (event, request: unknown) => {
     assertTrustedEvent(event)
-    if (factory === null) throw new Error('Self-media factory is not ready')
+    if (factory === null) throw new Error('module-disabled: 自媒体工厂未启用或尚未准备好')
     return await factory.promoteTopic(request)
   })
   ipcMain.handle('jimu:factory:save-content', async (event, request: unknown) => {
     assertTrustedEvent(event)
-    if (factory === null) throw new Error('Self-media factory is not ready')
+    if (factory === null) throw new Error('module-disabled: 自媒体工厂未启用或尚未准备好')
     return await factory.saveContentRevision(request)
   })
   ipcMain.handle('jimu:factory:read-content', async (event, request: unknown) => {
     assertTrustedEvent(event)
-    if (factory === null) throw new Error('Self-media factory is not ready')
+    if (factory === null) throw new Error('module-disabled: 自媒体工厂未启用或尚未准备好')
     return await factory.readContent(request)
   })
   ipcMain.handle('jimu:factory:approve-script', async (event, request: unknown) => {
     assertTrustedEvent(event)
-    if (factory === null) throw new Error('Self-media factory is not ready')
+    if (factory === null) throw new Error('module-disabled: 自媒体工厂未启用或尚未准备好')
     return await factory.approveScript(request)
   })
   ipcMain.handle('jimu:factory:link-agent', async (event, request: unknown) => {
     assertTrustedEvent(event)
-    if (factory === null) throw new Error('Self-media factory is not ready')
+    if (factory === null) throw new Error('module-disabled: 自媒体工厂未启用或尚未准备好')
     return await factory.linkAgentSession(request)
   })
   ipcMain.handle('jimu:factory:save-publication', async (event, request: unknown) => {
     assertTrustedEvent(event)
-    if (factory === null) throw new Error('Self-media factory is not ready')
+    if (factory === null) throw new Error('module-disabled: 自媒体工厂未启用或尚未准备好')
     return await factory.savePublication(request)
   })
   ipcMain.handle('jimu:factory:add-metrics', async (event, request: unknown) => {
     assertTrustedEvent(event)
-    if (factory === null) throw new Error('Self-media factory is not ready')
+    if (factory === null) throw new Error('module-disabled: 自媒体工厂未启用或尚未准备好')
     return await factory.addMetricSnapshot(request)
   })
   ipcMain.handle('jimu:factory:import-metrics-csv', async (event, request: unknown) => {
     assertTrustedEvent(event)
-    if (factory === null || mainWindow === null) throw new Error('Self-media factory is not ready')
+    if (factory === null || mainWindow === null) throw new Error('module-disabled: 自媒体工厂未启用或尚未准备好')
     const value = asRecord(request)
     const publicationId = typeof value.publicationId === 'string' ? value.publicationId : ''
     if (!publicationId) throw new Error('Publication id is required')
@@ -1146,7 +1576,7 @@ function registerIpcHandlers(): void {
   })
   ipcMain.handle('jimu:factory:import-assets', async (event, request: unknown) => {
     assertTrustedEvent(event)
-    if (factory === null || mainWindow === null) throw new Error('Self-media factory is not ready')
+    if (factory === null || mainWindow === null) throw new Error('module-disabled: 自媒体工厂未启用或尚未准备好')
     const value = asRecord(request)
     const kind = typeof value.kind === 'string' ? value.kind : 'image'
     const selection = await dialog.showOpenDialog(mainWindow, {

@@ -1,6 +1,6 @@
 import { cp, lstat, realpath, rename, rm } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
-import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 
 export interface StarterInspection {
   phase: string
@@ -33,6 +33,7 @@ export async function createStarterDirectory(options: {
   folderName: unknown
   templateRoot: string
   inspectRoot: (root: string) => Promise<StarterInspection>
+  excludedDirectories?: string[]
 }): Promise<{ target: string; inspection: StarterInspection }> {
   const folderName = parseStarterFolderName(options.folderName)
   const parent = await realpath(options.parent)
@@ -45,9 +46,18 @@ export async function createStarterDirectory(options: {
   }
 
   const temporary = join(parent, `.${folderName}.jimu-${randomUUID()}.tmp`)
+  const excluded = new Set(options.excludedDirectories ?? [])
   let renamed = false
   try {
-    await cp(options.templateRoot, temporary, { recursive: true, force: false, errorOnExist: true })
+    await cp(options.templateRoot, temporary, {
+      recursive: true,
+      force: false,
+      errorOnExist: true,
+      filter: (source) => {
+        const [topLevel] = relative(options.templateRoot, source).split(/[\\/]/u)
+        return !topLevel || !excluded.has(topLevel)
+      },
+    })
     const temporaryInspection = await options.inspectRoot(temporary)
     if (temporaryInspection.phase !== 'ready' || temporaryInspection.compatibility !== 'schema-1') {
       throw new Error(temporaryInspection.error ?? '新知识库校验失败')

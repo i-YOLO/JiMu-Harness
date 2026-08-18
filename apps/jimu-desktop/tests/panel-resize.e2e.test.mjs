@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -34,6 +34,12 @@ test("JiMu Agent panel separators resize, persist, reset and protect the convers
   const testState = await mkdtemp(path.join(os.tmpdir(), "jimu-panel-resize-e2e-"));
   const fixture = await createKnowledgeFixture("jimu-panel-knowledge-");
   await mkdir(screenshotRoot, { recursive: true });
+  await writeFile(path.join(testState, "settings.json"), `${JSON.stringify({
+    onboardingVersion: 1,
+    knowledgeModules: { benchmarks: true, factory: true },
+    knowledgeSource: "existing",
+    deepSeekTested: true,
+  }, null, 2)}\n`, { mode: 0o600 });
   const electronApp = await electron.launch({
     args: [desktopRoot],
     cwd: desktopRoot,
@@ -41,6 +47,7 @@ test("JiMu Agent panel separators resize, persist, reset and protect the convers
       ...process.env,
       JIMU_USER_DATA_DIR: testState,
       JIMU_KNOWLEDGE_ROOT: fixture.root,
+      DEEPSEEK_API_KEY: "fixture-key-for-configured-state",
       DSH_TELEMETRY_DISABLED: "1",
     },
   });

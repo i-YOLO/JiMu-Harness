@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-18-knowledge-standard-directory-integrity.md
-2026-08-18-knowledge-standard-directory-integrity.md: df0aece73df90fe2925494211721d225e56ce803
-2026-08-18-knowledge-standard-directory-integrity.zh.md: 61c4fd5b59e26c389392bb693f157a49c84f5a9e
+2026-08-18-knowledge-standard-directory-integrity.md: 63d4e5923a1b5277d528f8a2a8ccd9356efb4fbc
+2026-08-18-knowledge-standard-directory-integrity.zh.md: d6f1c6524ad1c43be52bf30e87e6f90326f7d007

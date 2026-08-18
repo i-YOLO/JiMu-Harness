@@ -58,6 +58,8 @@ The one registration-captured fact is the retry policy: when its resolved value 
 
 The plugin also declares its route in the configurable-provider directory (`ctx.llm.listConfigurableProviders()`): provider `deepseek-official`, settings namespace `llm-deepseek`, empty settings path — the whole section is the profile. Configuration surfaces use that entry to offer this adapter alongside dormant pi-ai providers.
 
+The same namespace registers authenticated model discovery for first-run credential verification. It sends `GET /models` with bearer authentication to the resolved DeepSeek base URL, refuses redirects and oversized replies, writes nothing, and returns model ids only. A draft key may be supplied for one test; otherwise the plugin resolves the configured credential without exposing it to the client.
+
 ## App attribution
 
 Every request carries the shared attribution header from dsh-llm's `attributionHeaders()` - the mandatory `User-Agent` baseline identifying the harness (see [dsh-llm § App attribution](../llm/README.md#app-attribution-attributionts)). Direct DeepSeek requests and OpenAI-compatible gateway requests get no provider-specific app-attribution headers under this adapter contract; OpenRouter app attribution is deferred to a future explicit OpenRouter adapter or mode. A request whose `GenerateOptions.purpose` is `compaction` (dsh-compaction-basic's auxiliary summarization call) additionally carries `x-deepseek-harness-compact: 1`, so the host can separate compaction traffic from conversation requests.

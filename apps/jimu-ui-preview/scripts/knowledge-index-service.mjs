@@ -17,7 +17,8 @@ import { Worker } from "node:worker_threads";
 import {
   KNOWLEDGE_AUXILIARY_CATEGORIES,
   KNOWLEDGE_CATEGORIES,
-  KNOWLEDGE_STANDARD_DIRECTORIES,
+  KNOWLEDGE_CORE_DIRECTORIES,
+  KNOWLEDGE_OPTIONAL_MODULES,
   validateKnowledgeManifest,
 } from "../shared/knowledge-schema.mjs";
 
@@ -97,7 +98,7 @@ async function inspectStandardDirectory(root, directory) {
   return undefined;
 }
 
-export async function inspectKnowledgeRoot(requestedRoot) {
+export async function inspectKnowledgeRoot(requestedRoot, options = {}) {
   if (typeof requestedRoot !== "string" || !requestedRoot.trim()) {
     return { phase: "unconfigured", compatibility: undefined, manifest: undefined };
   }
@@ -109,7 +110,14 @@ export async function inspectKnowledgeRoot(requestedRoot) {
     return { phase: "error", root: requestedRoot, error: error instanceof Error ? error.message : String(error) };
   }
 
-  for (const directory of KNOWLEDGE_STANDARD_DIRECTORIES) {
+  const requiredModules = Array.isArray(options.requiredModules) ? options.requiredModules : [];
+  const unknownModule = requiredModules.find((id) => !Object.hasOwn(KNOWLEDGE_OPTIONAL_MODULES, id));
+  if (unknownModule) return { phase: "incompatible", root, error: `未知知识库模块：${unknownModule}` };
+  const requiredDirectories = [
+    ...KNOWLEDGE_CORE_DIRECTORIES,
+    ...requiredModules.map((id) => KNOWLEDGE_OPTIONAL_MODULES[id].directory),
+  ];
+  for (const directory of requiredDirectories) {
     try {
       const error = await inspectStandardDirectory(root, directory);
       if (error) return { phase: "incompatible", root, error };
@@ -137,13 +145,15 @@ export async function inspectKnowledgeRoot(requestedRoot) {
   return { phase: "ready", root, compatibility: "schema-1", manifest: validation.manifest };
 }
 
-async function listMarkdownFiles(root) {
+async function listMarkdownFiles(root, excludedDirectories = new Set()) {
   const files = [];
   async function visit(directory) {
     const handle = await opendir(directory);
     for await (const entry of handle) {
       if (isHiddenOrIgnored(entry.name) || entry.isSymbolicLink()) continue;
       const absolute = path.join(directory, entry.name);
+      const [topLevel] = path.relative(root, absolute).split(path.sep);
+      if (excludedDirectories.has(topLevel)) continue;
       if (entry.isDirectory()) {
         await visit(absolute);
         continue;
@@ -1065,7 +1075,7 @@ function benchmarkSectionFor(document) {
   return "standards";
 }
 
-async function buildProjection(actualByPath, root, indexPath) {
+async function buildProjection(actualByPath, root, indexPath, moduleKey) {
   const actualDocuments = [...actualByPath.values()].sort((a, b) => a.sourcePath.localeCompare(b.sourcePath, "zh-CN", { numeric: true }));
   resolveRelations(actualDocuments);
   for (const document of actualDocuments) {
@@ -1119,7 +1129,8 @@ async function buildProjection(actualByPath, root, indexPath) {
     logDocuments: actualDocuments.filter((document) => document.logMarked).length,
   };
   return {
-    schemaVersion: 9,
+    schemaVersion: 10,
+    moduleKey,
     platform: "macOS",
     root,
     indexPath,
@@ -1570,9 +1581,11 @@ function applyGraphFilters(graph, filters) {
   };
 }
 
-async function scanWithWorker(root) {
+async function scanWithWorker(root, excludedDirectories) {
   return await new Promise((resolveScan, rejectScan) => {
-    const worker = new Worker(new URL("./knowledge-index-worker.mjs", import.meta.url), { workerData: { root } });
+    const worker = new Worker(new URL("./knowledge-index-worker.mjs", import.meta.url), {
+      workerData: { root, excludedDirectories: [...excludedDirectories] },
+    });
     worker.once("message", (message) => {
       if (message?.ok) resolveScan(message.documents);
       else rejectScan(new Error(message?.error ?? "Knowledge index worker failed"));
@@ -1584,9 +1597,9 @@ async function scanWithWorker(root) {
   });
 }
 
-export async function scanKnowledgeRoot(root) {
+export async function scanKnowledgeRoot(root, { excludedDirectories = [] } = {}) {
   const resolvedRoot = await realpath(root);
-  const files = await listMarkdownFiles(resolvedRoot);
+  const files = await listMarkdownFiles(resolvedRoot, new Set(excludedDirectories));
   return await Promise.all(files.map((file) => parseDocument(resolvedRoot, file)));
 }
 
@@ -1603,11 +1616,14 @@ export class KnowledgeIndexService {
     indexPath = DEFAULT_INDEX_PATH,
     databasePath = DEFAULT_DATABASE_PATH,
     useWorker = false,
+    excludedDirectories = [],
   } = {}) {
     this.requestedRoot = root;
     this.indexPath = indexPath;
     this.databasePath = databasePath;
     this.useWorker = useWorker;
+    this.excludedDirectories = new Set(excludedDirectories);
+    this.moduleKey = [...this.excludedDirectories].sort().join(",");
     this.root = null;
     this.actualByPath = new Map();
     this.snapshot = null;
@@ -1625,7 +1641,7 @@ export class KnowledgeIndexService {
   async loadCachedProjection() {
     try {
       const cached = JSON.parse(await readFile(this.indexPath, "utf8"));
-      if (cached?.schemaVersion !== 9 || cached.root !== this.root || !Array.isArray(cached.documents)) return false;
+      if (cached?.schemaVersion !== 10 || cached.root !== this.root || cached.moduleKey !== this.moduleKey || !Array.isArray(cached.documents)) return false;
       const actual = cached.documents.filter((document) => document && document.virtual === false && typeof document.sourcePath === "string");
       this.actualByPath = new Map(actual.map((document) => [document.sourcePath, document]));
       this.snapshot = cached;
@@ -1640,7 +1656,9 @@ export class KnowledgeIndexService {
 
   async reconcileAll() {
     if (!this.root) throw new Error("Knowledge root is unavailable.");
-    const parsed = this.useWorker ? await scanWithWorker(this.root) : await scanKnowledgeRoot(this.root);
+    const parsed = this.useWorker
+      ? await scanWithWorker(this.root, this.excludedDirectories)
+      : await scanKnowledgeRoot(this.root, { excludedDirectories: [...this.excludedDirectories] });
     this.actualByPath = new Map(parsed.map((document) => [document.sourcePath, document]));
     await this.rebuildProjection();
     return this.snapshot;
@@ -1670,7 +1688,7 @@ export class KnowledgeIndexService {
   }
 
   async rebuildProjection() {
-    this.snapshot = await buildProjection(this.actualByPath, this.root, this.indexPath);
+    this.snapshot = await buildProjection(this.actualByPath, this.root, this.indexPath, this.moduleKey);
     this.graph = graphSnapshot(this.snapshot);
     if (this.database) syncSearchDatabase(this.database, this.snapshot.documents);
     await persistSnapshot(this.indexPath, this.snapshot);
@@ -1883,6 +1901,7 @@ export class KnowledgeIndexService {
     if (!this.root || !relativeName) return;
     const relativePath = relativeName.split(path.sep).join("/");
     if (relativePath.split("/").some(isHiddenOrIgnored)) return;
+    if (this.excludedDirectories.has(relativePath.split("/")[0])) return;
     const absolute = path.resolve(this.root, relativeName);
     if (!isInside(this.root, absolute)) return;
     if (path.extname(relativePath).toLocaleLowerCase() !== ".md") return;

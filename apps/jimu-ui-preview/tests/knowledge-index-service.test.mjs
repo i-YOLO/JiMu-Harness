@@ -269,3 +269,34 @@ test("indexes, searches, resolves, graphs and incrementally refreshes a read-onl
   await cachedService.whenIdle();
   assert.equal(cachedService.snapshot.documents.some((document) => document.title === "后台校准后的标题"), true);
 });
+
+test("disabled optional modules are excluded from indexing even when their directories exist", async (t) => {
+  const fixture = await mkdtemp(path.join(os.tmpdir(), "jimu-disabled-modules-"));
+  const root = path.join(fixture, "knowledge");
+  const support = path.join(fixture, "support");
+  await Promise.all([
+    mkdir(path.join(root, "01-Inbox"), { recursive: true }),
+    mkdir(path.join(root, "07-对标博主库"), { recursive: true }),
+    mkdir(path.join(root, "08-自媒体工厂"), { recursive: true }),
+  ]);
+  await Promise.all([
+    writeFile(path.join(root, "01-Inbox", "01-core.md"), "# Core document\n"),
+    writeFile(path.join(root, "07-对标博主库", "01-hidden.md"), "# Hidden benchmark\n"),
+    writeFile(path.join(root, "08-自媒体工厂", "01-hidden.md"), "# Hidden factory\n"),
+  ]);
+  const service = new KnowledgeIndexService({
+    root,
+    indexPath: path.join(support, "index.json"),
+    databasePath: path.join(support, "search.sqlite"),
+    excludedDirectories: ["07-对标博主库", "08-自媒体工厂"],
+  });
+  t.after(async () => {
+    service.close();
+    await rm(fixture, { recursive: true, force: true });
+  });
+  const snapshot = await service.initialize();
+  assert.equal(snapshot.documents.some((document) => document.title === "Core document"), true);
+  assert.equal(snapshot.documents.some((document) => document.title === "Hidden benchmark"), false);
+  assert.equal(snapshot.documents.some((document) => document.title === "Hidden factory"), false);
+  assert.equal(snapshot.stats.benchmarkProfiles, 0);
+});

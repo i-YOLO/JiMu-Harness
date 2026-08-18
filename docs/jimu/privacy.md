@@ -2,7 +2,7 @@
 
 JiMu Harness ships code and a verified empty knowledge template only. It does not ship user content, demo records, QA captures, local indexes, logs, credentials, build caches, or developer paths.
 
-Runtime knowledge-root settings are stored under Electron user data with mode `0600`. The selected path may be shown locally in Settings but is redacted from public diagnostics and is never added to telemetry. API keys are handled by the Harness credentials interface and are never returned in plugin snapshots.
+Runtime knowledge-root and optional-module settings are stored under Electron user data with mode `0600`. The selected path may be shown locally in Settings but is redacted from public diagnostics and is never added to telemetry. API keys are tested through authenticated model discovery and are written only after success; Harness credential views return configured/source/writable metadata without returning the value.
 
 Every public release must pass:
 

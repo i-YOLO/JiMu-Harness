@@ -8,9 +8,11 @@ This repository preserves the complete upstream Git history and tags. DeepSeek H
 
 ## Privacy boundary
 
-The repository contains no user knowledge, projects, sessions, credentials, analytics, screenshots, or demo records. A first launch has no configured knowledge root and shows a setup state. JiMu does not scan the home directory.
+The repository contains no user knowledge, projects, sessions, credentials, analytics, screenshots, or demo records. First launch selects optional modules, installs a local knowledge base, and verifies a DeepSeek API key. JiMu does not scan the home directory.
 
 The empty companion template lives in [i-YOLO/JiMu-Knowledge](https://github.com/i-YOLO/JiMu-Knowledge). Git synchronization is intentionally delegated to the user's normal Git tooling; the app does not store repository credentials.
+
+The default path installs the complete JiMu-Knowledge from a locked GitHub Release and automatically uses the same-version DMG copy when offline. `07-对标博主库` and `08-自媒体工厂` may be disabled independently during first-run setup or later in Settings; disabling a module neither creates, scans, nor deletes its directory.
 
 ## Architecture
 
@@ -49,7 +51,7 @@ Official release builds never accept an unlocked local template. They download t
 | --- | --- | --- |
 | 0.1.x | 1 | 1.0.x |
 
-Roots without a manifest but containing every standard directory are opened as read-only-compatible `legacy-schema-1`. `assets` may be a symlink when its resolved target remains a directory inside the knowledge root; escaping, dangling, and non-directory links are rejected, while content-category paths must remain real directories. Invalid or future manifests are rejected without replacing the active root.
+Roots without a manifest but containing every core directory are opened as read-only-compatible `legacy-schema-1`; each locally enabled optional module must still be present. `assets` may be a symlink when its resolved target remains a directory inside the knowledge root; escaping, dangling, and non-directory links are rejected, while content-category paths must remain real directories. Invalid or future manifests are rejected without replacing the active root.
 
 ## Upstream DeepSeek Harness
 
