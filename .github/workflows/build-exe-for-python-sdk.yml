@@ -58,7 +58,7 @@ jobs:
   # construct the matrix before the dependent jobs.
   plan:
     name: plan targets
-    if: inputs.ci || inputs.release || github.event_name == 'workflow_dispatch' || github.event.label.name == 'build-exe'
+    if: github.repository == 'deepseek-harness/deepseek-harness' && (inputs.ci || inputs.release || github.event_name == 'workflow_dispatch' || github.event.label.name == 'build-exe')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
