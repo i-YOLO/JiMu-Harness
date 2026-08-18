@@ -53,6 +53,31 @@ export const KNOWLEDGE_STANDARD_DIRECTORIES = Object.freeze([
   ...KNOWLEDGE_MODULE_IDS.map((id) => KNOWLEDGE_OPTIONAL_MODULES[id].directory),
 ]);
 
+export const KNOWLEDGE_FACTORY_LEAF_DIRECTORIES = Object.freeze([
+  "08-自媒体工厂/01-灵感与调研/01-灵感箱",
+  "08-自媒体工厂/01-灵感与调研/02-对标拆解",
+  "08-自媒体工厂/01-灵感与调研/03-选题候选",
+  "08-自媒体工厂/02-文案与内容/内容项目",
+  "08-自媒体工厂/03-素材库/01-图片与配图",
+  "08-自媒体工厂/03-素材库/02-B-roll",
+  "08-自媒体工厂/03-素材库/03-完整场景",
+  "08-自媒体工厂/03-素材库/04-文字与图形动效",
+  "08-自媒体工厂/03-素材库/05-Jimu角色",
+  "08-自媒体工厂/03-素材库/06-封面",
+  "08-自媒体工厂/03-素材库/07-音频",
+  "08-自媒体工厂/03-素材库/08-PR与RAW场景",
+  "08-自媒体工厂/04-视频流水线",
+  "08-自媒体工厂/05-发布与数据/01-内容档案",
+  "08-自媒体工厂/05-发布与数据/02-数据导入",
+  "08-自媒体工厂/05-发布与数据/03-数据快照",
+  "08-自媒体工厂/05-发布与数据/04-复盘沉淀",
+]);
+
+export const KNOWLEDGE_TEMPLATE_DIRECTORIES = Object.freeze([
+  ...KNOWLEDGE_STANDARD_DIRECTORIES,
+  ...KNOWLEDGE_FACTORY_LEAF_DIRECTORIES,
+]);
+
 function parseVersion(value) {
   if (typeof value !== "string") return null;
   const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(value);

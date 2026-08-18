@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { lstat, readFile, readdir, realpath } from "node:fs/promises";
 import path from "node:path";
-import { KNOWLEDGE_STANDARD_DIRECTORIES } from "../apps/jimu-ui-preview/shared/knowledge-schema.mjs";
+import { KNOWLEDGE_TEMPLATE_DIRECTORIES } from "../apps/jimu-ui-preview/shared/knowledge-schema.mjs";
 
 const args = process.argv.slice(2);
 
@@ -53,7 +53,7 @@ if (knowledgeManifests.length !== 1) {
 } else {
   const templateRelative = path.posix.dirname(knowledgeManifests[0]);
   const templateRoot = path.join(root, ...templateRelative.split("/"));
-  for (const directory of KNOWLEDGE_STANDARD_DIRECTORIES) {
+  for (const directory of KNOWLEDGE_TEMPLATE_DIRECTORIES) {
     const relative = path.posix.join(templateRelative, directory);
     try {
       const info = await lstat(path.join(templateRoot, directory));

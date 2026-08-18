@@ -10,8 +10,10 @@ import {
   JIMU_KNOWLEDGE_TEMPLATE_VERSION,
   KNOWLEDGE_CATEGORIES,
   KNOWLEDGE_CATEGORY_IDS,
+  KNOWLEDGE_FACTORY_LEAF_DIRECTORIES,
   KNOWLEDGE_OPTIONAL_MODULES,
   KNOWLEDGE_STANDARD_DIRECTORIES,
+  KNOWLEDGE_TEMPLATE_DIRECTORIES,
 } from "../shared/knowledge-schema.mjs";
 
 async function fixture(t) {
@@ -40,6 +42,11 @@ test("the shared schema is the fixed eight-category source", () => {
   ]);
   assert.equal(KNOWLEDGE_CATEGORIES.length, 8);
   assert.equal(new Set(KNOWLEDGE_CATEGORIES.map((category) => category.directory)).size, 8);
+  assert.equal(KNOWLEDGE_FACTORY_LEAF_DIRECTORIES.length, 17);
+  assert.deepEqual(
+    KNOWLEDGE_TEMPLATE_DIRECTORIES,
+    [...KNOWLEDGE_STANDARD_DIRECTORIES, ...KNOWLEDGE_FACTORY_LEAF_DIRECTORIES],
+  );
 });
 
 test("root inspection distinguishes unconfigured, Schema 1 and legacy roots without writing", async (t) => {

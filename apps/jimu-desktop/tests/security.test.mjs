@@ -8,7 +8,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
-import { KNOWLEDGE_STANDARD_DIRECTORIES } from "../../jimu-ui-preview/shared/knowledge-schema.mjs";
+import { KNOWLEDGE_TEMPLATE_DIRECTORIES } from "../../jimu-ui-preview/shared/knowledge-schema.mjs";
 import { ensureKnowledgeTemplateDirectories } from "../scripts/after-pack.mjs";
 
 const desktopRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -92,7 +92,7 @@ test("the approved JiMu icon source remains byte-for-byte unchanged", async () =
   assert.equal(createHash("sha256").update(source).digest("hex"), "e73dce26b35b4c8bf2fea5e3dc38fd6a4356ed13958449338277b5f0aba906f1");
 });
 
-test("afterPack restores empty Knowledge directories and the release audit requires them", async (t) => {
+test("afterPack restores the complete empty Knowledge protocol and the release audit requires it", async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "jimu-packaged-template-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const templateRoot = path.join(root, "jimu-knowledge-template");
@@ -105,7 +105,7 @@ test("afterPack restores empty Knowledge directories and the release audit requi
   );
 
   await ensureKnowledgeTemplateDirectories(root);
-  for (const directory of KNOWLEDGE_STANDARD_DIRECTORIES) {
+  for (const directory of KNOWLEDGE_TEMPLATE_DIRECTORIES) {
     const info = await lstat(path.join(templateRoot, directory));
     assert.equal(info.isDirectory(), true);
     assert.equal(info.isSymbolicLink(), false);
