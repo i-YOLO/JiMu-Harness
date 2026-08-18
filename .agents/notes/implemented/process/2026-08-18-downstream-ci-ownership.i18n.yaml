@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-08-18-downstream-ci-ownership.md
-2026-08-18-downstream-ci-ownership.md: 1ca4cdbfafd97ad197b4e31b6a7fc9be03afdd98
-2026-08-18-downstream-ci-ownership.zh.md: dd72f5f01a30388fe6caa33311686b7ed5c3c54c
+2026-08-18-downstream-ci-ownership.md: 5801e9fd000f8d8734a529d8aea7c84c25d69cfc
+2026-08-18-downstream-ci-ownership.zh.md: 3fef781c46fc86d61b67496857c2d7386e87ff6e

@@ -14,6 +14,8 @@ JiMu 保留 DeepSeek Harness 的完整源码历史，其中包含依赖上游组
 
 `JiMu downstream gates` 是下游仓库唯一自动运行的产品工作流。它提供三个稳定 Job：源码与历史安全扫描、受控的 Node 24 上游兼容检查，以及 macOS JiMu Desktop 构建与测试。该工作流可以复用，因此手动 macOS 发布会先重复三个 Job，再从准确的 `main` 提交构建、挂载、审计、生成校验和并发布 DMG。JiMu 主动使用的远程 Action 均采用审核过的完整 Commit SHA，并使用当前兼容 Node 24 的 Action 运行时。
 
+Electron Builder 根据 Manifest 中锁定的 Electron 版本解析发行文件。打包配置不得将 `electronDist` 指向工作区本地 `node_modules` 路径，因为 pnpm 的 CI 布局不保证该路径存在。
+
 Gitleaks 在安装依赖前运行，显式读取 `.gitleaks.toml`，并同时扫描源码树和 `upstream/master..HEAD`。白名单只列出经过审查的上游 Fixture 路径，不会全局关闭规则，也不会按任意凭据值放行。依赖、构建、覆盖率和发布生成目录不进入源码扫描，改由发布审计处理。每次运行还会创建临时高熵负向样例，证明新引入的凭据仍会让 Job 失败。
 
 每个上游专用工作流的独立 Job 都会校验 `github.repository` 是否为 `deepseek-harness/deepseek-harness`。守卫合入后，JiMu 仓库还会停用这些工作流。源码继续保留以便同步上游，而 JiMu Pull Request 只为下游 Job 与 CodeQL 消耗 Runner。

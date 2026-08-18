@@ -62,7 +62,6 @@
   "build": {
     "appId": "com.iyolo.jimu",
     "productName": "JiMu",
-    "electronDist": "node_modules/electron/dist",
     "artifactName": "JiMu-${version}-macOS-arm64.${ext}",
     "asar": false,
     "directories": {
