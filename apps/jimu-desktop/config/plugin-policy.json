@@ -1,0 +1,99 @@
+{
+  "schemaVersion": 1,
+  "groups": [
+    {
+      "id": "session-title",
+      "label": "自动会话标题",
+      "description": "使用模型为新会话生成简短标题。",
+      "category": "agent",
+      "entryIds": ["session-title-llm"],
+      "management": "toggleable",
+      "restartRequired": true
+    },
+    {
+      "id": "web-search",
+      "label": "DeepSeek 联网搜索",
+      "description": "让 Agent 使用 DeepSeek 搜索提供方查询网络信息。",
+      "category": "tools",
+      "entryIds": ["web-search-deepseek", "tool-web"],
+      "management": "toggleable",
+      "configurableNamespace": "web-search-deepseek",
+      "restartRequired": true
+    },
+    {
+      "id": "skills",
+      "label": "Skill 能力",
+      "description": "从本地目录发现 Skill，并向 Agent 提供目录与加载工具。",
+      "category": "knowledge",
+      "entryIds": ["skill-filesystem", "skill-badge", "tool-skill"],
+      "management": "toggleable",
+      "restartRequired": true
+    },
+    {
+      "id": "background-jobs",
+      "label": "后台任务工具",
+      "description": "允许 Agent 查看、等待和管理长时间运行的后台任务。",
+      "category": "tools",
+      "entryIds": ["tool-jobs"],
+      "management": "toggleable",
+      "restartRequired": true
+    },
+    {
+      "id": "subagents",
+      "label": "子 Agent",
+      "description": "允许主 Agent 创建、查看、控制和汇总子 Agent。",
+      "category": "agent",
+      "entryIds": [
+        "subagent-spawn-in-process",
+        "subagent-fork-in-process",
+        "tool-subagent-control",
+        "tool-subagent-list-agents",
+        "tool-subagent",
+        "tool-subagent-fork",
+        "tool-subagent-report"
+      ],
+      "management": "toggleable",
+      "restartRequired": true
+    },
+    {
+      "id": "workflow",
+      "label": "Workflow",
+      "description": "运行并管理由 Worker Thread 承载的结构化工作流。",
+      "category": "workflow",
+      "entryIds": ["workflow-worker-thread", "tool-workflow"],
+      "management": "toggleable",
+      "restartRequired": true
+    },
+    {
+      "id": "task-helpers",
+      "label": "任务与目标辅助",
+      "description": "向 Agent 提供 Todo、Goal 与持续执行辅助工具。",
+      "category": "workflow",
+      "entryIds": ["tool-todo", "tool-goal", "tool-ralph"],
+      "management": "toggleable",
+      "restartRequired": true
+    },
+    {
+      "id": "shell-settings",
+      "label": "Shell 执行",
+      "description": "配置命令超时与单流输出上限；执行能力本身受系统保护。",
+      "category": "system",
+      "entryIds": ["tool-bash", "tool-pwsh"],
+      "management": "configurable",
+      "lockedReason": "Shell 是 JiMu Agent 的核心执行能力，不能在此停用。",
+      "configurableNamespace": "shell",
+      "restartRequired": true
+    },
+    {
+      "id": "agent-loop-settings",
+      "label": "Agent Loop",
+      "description": "配置单步可并行执行的工具调用数量。",
+      "category": "system",
+      "entryIds": ["agent-loop"],
+      "management": "configurable",
+      "lockedReason": "Agent Loop 是所有会话的核心运行循环，不能停用。",
+      "configurableNamespace": "agent-loop",
+      "restartRequired": true
+    }
+  ]
+}

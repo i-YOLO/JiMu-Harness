@@ -14,6 +14,13 @@
   "bin": {
     "dsh": "lib/bin.js"
   },
+  "exports": {
+    "./profile-boot": {
+      "types": "./lib/types/profile-boot.d.ts",
+      "default": "./lib/profile-boot.js"
+    },
+    "./package.json": "./package.json"
+  },
   "files": [
     "lib/*.js",
     "config"

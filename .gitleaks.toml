@@ -1,0 +1,32 @@
+[extend]
+useDefault = true
+
+# These exact files are inherited unchanged from the public DeepSeek Harness
+# history and contain synthetic API-key examples. JiMu changes are scanned
+# separately from upstream/master, so edits cannot hide behind this baseline.
+[[allowlists]]
+description = "Unmodified upstream synthetic credential documentation and tests"
+paths = [
+  '''^\.agents/notes/archived/process/2026-07-20-generated-cordis-core-api\.i18n\.yaml$''',
+  '''^\.agents/notes/implemented/architecture/2026-06-30-bash-stdin-env-trusted-plugin-api\.i18n\.yaml$''',
+  '''^\.agents/notes/implemented/architecture/2026-07-15-replay-token-meter-service\.i18n\.yaml$''',
+  '''^\.agents/notes/implemented/architecture/2026-07-29-request-level-llm-config-credentials\.i18n\.yaml$''',
+  '''^\.agents/notes/implemented/architecture/2026-07-30-adapter-owned-max-token-defaults\.i18n\.yaml$''',
+  '''^\.agents/notes/implemented/bug-fix/2026-08-06-provider-credential-lifecycle\.i18n\.yaml$''',
+  '''^\.agents/notes/implemented/bug-fix/2026-08-12-max-tokens-turn-end-notice\.i18n\.yaml$''',
+  '''^\.agents/notes/implemented/feature/2026-06-30-session-store-fork-api\.i18n\.yaml$''',
+  '''^\.agents/notes/implemented/feature/2026-07-28-sdk-max-output-tokens\.i18n\.yaml$''',
+  '''^\.agents/notes/implemented/feature/2026-07-30-deepseek-onboarding-credential-setup\.i18n\.yaml$''',
+  '''^\.agents/notes/implemented/feature/2026-07-31-gui-full-access-confirmation\.i18n\.yaml$''',
+  '''^\.agents/notes/implemented/feature/2026-08-08-windows-acl-restricted-token-sandbox\.i18n\.yaml$''',
+  '''^\.agents/notes/implemented/simplification/2026-06-20-public-agent-stop-api\.i18n\.yaml$''',
+  '''^\.agents/notes/implemented/testing/2026-06-19-real-api-e2e-ci\.i18n\.yaml$''',
+  '''^\.agents/notes/proposed/simplification/2026-07-04-prune-dead-core-spine-api\.i18n\.yaml$''',
+  '''^\.agents/notes/rejected/simplification/2026-07-12-prune-unused-skill-registry-api\.i18n\.yaml$''',
+  '''^docs/api-gateway\.i18n\.yaml$''',
+  '''^docs/subsystems/credentials\.i18n\.yaml$''',
+  '''^docs/subsystems/token-meter\.i18n\.yaml$''',
+  '''^packages/client/ui-settings-models/tests/components\.client\.spec\.tsx$''',
+  '''^packages/session/session-telemetry-otel/tests/loader-composition\.e2e\.ts$''',
+  '''^packages/session/session-telemetry/tests/redact\.spec\.ts$''',
+]

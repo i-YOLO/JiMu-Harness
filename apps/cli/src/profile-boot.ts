@@ -180,6 +180,38 @@ export interface RunProfileOptions {
   patchFiles: readonly string[]
   /** The invocation's inner arguments, handed to the tree through `ctx.cmdlineArgs`. */
   args: readonly string[]
+  /** Optional host manifest used to resolve bare plugins in embedded runtimes such as Electron. */
+  bareModuleBaseUrl?: string
+  /** Keep user patch files live; desktop embeddings may disable this and restart to apply changes. */
+  watchUserPatches?: boolean
+  /** Dispose within the caller's process without installing signal/fatal-exit handlers. */
+  embedded?: boolean
+}
+
+/** A bounded disposer for an embedded host that must never terminate its owner process. */
+function createEmbeddedShutdown(dispose: () => Promise<void>, timeoutMs = 5_000): ProcessShutdown {
+  let pending: Promise<void> | undefined
+  const start = (): Promise<void> => {
+    if (pending !== undefined) return pending
+    pending = new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error(`embedded Harness disposal exceeded ${timeoutMs}ms`))
+      }, timeoutMs)
+      const disposal = dispose()
+      void disposal.then(
+        () => { clearTimeout(timeout); resolve() },
+        (error: unknown) => {
+          clearTimeout(timeout)
+          reject(error instanceof Error ? error : new Error(String(error)))
+        },
+      )
+    })
+    return pending
+  }
+  return {
+    shutdown: () => start(),
+    interrupt: () => { void start().catch(() => {}) },
+  }
 }
 
 /**
@@ -207,7 +239,8 @@ function suppressShutdownError(ctx: Context, signal: AbortSignal, error: unknown
 export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Context; shutdown: ProcessShutdown }> {
   const composed = composeProfile(options.profile, options.patchFiles)
   const app: { current?: Context } = {}
-  const shutdown = createProcessShutdown(async () => { await app.current?.fiber.dispose() })
+  const dispose = async (): Promise<void> => { await app.current?.fiber.dispose() }
+  const shutdown = options.embedded === true ? createEmbeddedShutdown(dispose) : createProcessShutdown(dispose)
   const signalShutdown = new AbortController()
   const interrupt = (code: number): void => {
     signalShutdown.abort()
@@ -218,11 +251,11 @@ export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Con
   // SIGTERM is a supervisor's ordinary stop request and exits 0 on every
   // surface — the launcher does not know whether the app considered its work
   // complete; SIGINT is a user interrupt and reports 130.
-  process.on('SIGTERM', () => { interrupt(0) })
-  process.on('SIGINT', () => { interrupt(130) })
-  installFailLoud(NAME, process, async () => {
-    await app.current?.fiber.dispose()
-  })
+  if (options.embedded !== true) {
+    process.on('SIGTERM', () => { interrupt(0) })
+    process.on('SIGINT', () => { interrupt(130) })
+    installFailLoud(NAME, process, dispose)
+  }
 
   const rootConfig = join(composed.profile.dir, PROFILE_ROOT_FILENAME)
   // Recomposition for the live user layers: bundle layers below, overlays
@@ -256,7 +289,7 @@ export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Con
       args: options.args,
       exit: code => void shutdown.shutdown(code),
     })
-  })
+  }, options.bareModuleBaseUrl)
   app.current = ctx
   // A surface can dispose the whole tree while boot or this post-boot watcher
   // setup is still in flight — a signal, or a fast one-shot's appExit. Loader
@@ -265,7 +298,8 @@ export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Con
   // landed mid-setup. Watching is unconditional: a one-shot surface exits
   // through its bounded shutdown, which disposes the watchers before the
   // loop drains.
-  if (!signalShutdown.signal.aborted
+  if (options.watchUserPatches !== false
+    && !signalShutdown.signal.aborted
     && ctx.fiber.state === FiberState.ACTIVE
     && ctx.get('loader') !== undefined) {
     try {

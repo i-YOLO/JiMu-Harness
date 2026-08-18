@@ -8,6 +8,7 @@
 
 import { pathToFileURL } from 'node:url'
 import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { parseEnv } from 'node:util'
 import { basename, dirname, isAbsolute, resolve } from 'node:path'
 import * as yaml from 'js-yaml'
@@ -496,9 +497,13 @@ export async function mountRootInclude(
         const specifier = isAbsolute(name) ? pathToFileURL(name).href : name
         if (name.startsWith('.') || name.startsWith('cordis:')) return super.import(specifier, getOuterStack)
         const internal = this.ctx.loader.internal
-        /* v8 ignore next -- Node supplies the internal loader; this preserves the
-           original diagnostic for hypothetical embedders without it. */
-        if (internal === undefined) return super.import(specifier, getOuterStack)
+        // Electron does not expose Node's private ESM ModuleLoader. Resolve
+        // against the installed host explicitly so its main process can mount
+        // the same profile without depending on private Node internals.
+        if (internal === undefined) {
+          const resolved = createRequire(bareModuleBaseUrl).resolve(specifier)
+          return import(pathToFileURL(resolved).href)
+        }
         return internal.import(specifier, bareModuleBaseUrl, {})
       }
     }
@@ -769,6 +774,19 @@ export async function boot(
     ctx.baseUrl = pathToFileURL(dirname(absoluteConfigPath)).href + '/'
     ctx.provide('dshHomePath', dshHomePath)
     await ctx.plugin(Loader)
+    if (bareModuleBaseUrl !== undefined && ctx.loader.internal === undefined) {
+      const requireFromHost = createRequire(bareModuleBaseUrl)
+      ctx.loader.internal = {
+        version: 'v2',
+        async import(specifier: string, parentURL: string): Promise<unknown> {
+          if (specifier.startsWith('node:') || specifier.startsWith('data:')) return await import(specifier)
+          if (specifier.startsWith('file:')) return await import(specifier)
+          if (specifier.startsWith('.')) return await import(new URL(specifier, parentURL).href)
+          const resolved = isAbsolute(specifier) ? specifier : requireFromHost.resolve(specifier)
+          return await import(pathToFileURL(resolved).href)
+        },
+      } as unknown as NonNullable<typeof ctx.loader.internal>
+    }
     await prepare?.(ctx)
     stage = 'plugin tree failed to load'
     await mountRootInclude(ctx, absoluteConfigPath, patches, bareModuleBaseUrl)

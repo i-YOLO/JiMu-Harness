@@ -1,0 +1,44 @@
+export const JIMU_KNOWLEDGE_SCHEMA_VERSION = 1;
+export const JIMU_KNOWLEDGE_TEMPLATE_VERSION = "1.0.0";
+export const JIMU_MINIMUM_HARNESS_VERSION = "0.1.0";
+export const JIMU_KNOWLEDGE_REPOSITORY_URL = "https://github.com/i-YOLO/JiMu-Knowledge";
+
+export const KNOWLEDGE_CATEGORIES = Object.freeze([
+  { id: "inbox", label: "项目灵感", directory: "01-Inbox", behavior: "card", type: "Inspiration", stage: "inspiration", accent: "yellow", eyebrow: "INSPIRATION / INBOX" },
+  { id: "projects", label: "项目", directory: "02-Projects", behavior: "project-directory", type: "Project", stage: "execution", accent: "teal", eyebrow: "PROJECT / WORKSPACE" },
+  { id: "knowledge", label: "知识", directory: "03-Knowledge", behavior: "card", type: "KnowledgeCard", stage: "knowledge", accent: "cobalt", eyebrow: "KNOWLEDGE / CARD" },
+  { id: "content", label: "内容", directory: "04-Content", behavior: "card", type: "Content", stage: "output", accent: "magenta", eyebrow: "CONTENT / ASSET" },
+  { id: "prompts", label: "提示词", directory: "05-Prompts", behavior: "card", type: "Prompt", stage: "method", accent: "cobalt", eyebrow: "PROMPT / REUSABLE" },
+  { id: "business", label: "商业", directory: "06-Business", behavior: "card", type: "Business", stage: "decision", accent: "yellow", eyebrow: "BUSINESS / DECISION" },
+  { id: "benchmarks", label: "对标博主", directory: "07-对标博主库", behavior: "benchmark-profile", type: "BenchmarkMaterial", stage: "research", accent: "magenta", eyebrow: "BENCHMARK / MATERIAL" },
+  { id: "skills", label: "Skills", directory: "98-Skills", behavior: "skill-directory", type: "Skill", stage: "method", accent: "teal", eyebrow: "SKILL / RUNTIME" },
+]);
+
+export const KNOWLEDGE_CATEGORY_IDS = Object.freeze(KNOWLEDGE_CATEGORIES.map((category) => category.id));
+
+export const KNOWLEDGE_AUXILIARY_CATEGORIES = Object.freeze([
+  { id: "factory", label: "自媒体工厂", directory: "08-自媒体工厂", type: "FactoryRecord", stage: "production", accent: "magenta", eyebrow: "SELF-MEDIA / FACTORY" },
+  { id: "system", label: "系统", directory: "00-System", type: "System", stage: "system", accent: "cobalt", eyebrow: "SYSTEM / CONTROL" },
+  { id: "archive", label: "归档", directory: "90-Archive", type: "Archive", stage: "archive", accent: "yellow", eyebrow: "ARCHIVE / HISTORICAL" },
+  { id: "logs", label: "日志", directory: "99-Logs", type: "Log", stage: "execution", accent: "teal", eyebrow: "LOG / TRACE" },
+  { id: "other", label: "其他", directory: "ROOT", type: "Document", stage: "reference", accent: "cobalt", eyebrow: "DOCUMENT / REFERENCE" },
+]);
+
+export const KNOWLEDGE_STANDARD_DIRECTORIES = Object.freeze([
+  "00-System",
+  ...KNOWLEDGE_CATEGORIES.map((category) => category.directory),
+  "08-自媒体工厂",
+  "90-Archive",
+  "99-Logs",
+  "assets",
+]);
+
+export function validateKnowledgeManifest(value) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return { ok: false, error: "知识库 Manifest 不是对象。" };
+  if (!Number.isInteger(value.schemaVersion)) return { ok: false, error: "知识库 Manifest 缺少 schemaVersion。" };
+  if (value.schemaVersion > JIMU_KNOWLEDGE_SCHEMA_VERSION) return { ok: false, error: "知识库版本高于当前 JiMu 支持范围。", futureSchema: true };
+  if (value.schemaVersion !== JIMU_KNOWLEDGE_SCHEMA_VERSION) return { ok: false, error: "知识库 schemaVersion 不受支持。" };
+  if (typeof value.templateVersion !== "string" || !value.templateVersion) return { ok: false, error: "知识库 Manifest 缺少 templateVersion。" };
+  if (JSON.stringify(value.categories) !== JSON.stringify(KNOWLEDGE_CATEGORY_IDS)) return { ok: false, error: "知识库分类与 Schema 1 不一致。" };
+  return { ok: true, manifest: value };
+}

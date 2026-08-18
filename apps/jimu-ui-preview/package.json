@@ -1,0 +1,35 @@
+{
+  "name": "@i-yolo/jimu-ui-preview",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./app": "./src/App.jsx",
+    "./styles.css": "./src/styles.css"
+  },
+  "scripts": {
+    "dev": "vite",
+    "index:knowledge": "node scripts/knowledge-index-service.mjs",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "node --test tests/*.test.mjs",
+    "test:agent": "node --test tests/agent-transcript.test.mjs",
+    "test:factory": "node --test tests/factory-service.test.mjs",
+    "test:knowledge": "node --test tests/knowledge-index-service.test.mjs",
+    "test:layout": "node --test tests/panel-layout.test.mjs",
+    "test:plugins": "node --test tests/plugin-management.test.mjs"
+  },
+  "dependencies": {
+    "@fontsource/ibm-plex-mono": "^5.3.0",
+    "@fontsource/noto-sans-sc": "^5.3.0",
+    "@phosphor-icons/react": "^2.1.10",
+    "@vitejs/plugin-react": "^4.7.0",
+    "cytoscape": "^3.33.1",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
+    "vite": "6.4.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {}
+}

@@ -1,0 +1,45 @@
+name: JiMu downstream gates
+
+on:
+  pull_request:
+    paths:
+      - "apps/jimu-**"
+      - "docs/jimu/**"
+      - "config/jimu-migration-allowlist.json"
+      - "scripts/jimu-audit.mjs"
+      - "README*"
+      - "TRADEMARKS.md"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.19.0
+          cache: pnpm
+      - run: git remote add upstream https://github.com/deepseek-ai/deepseek-harness.git || true
+      - run: git fetch upstream master --tags
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build:lib
+      - run: pnpm --filter @i-yolo/jimu-ui-preview test
+      - run: pnpm --filter @i-yolo/jimu-desktop test
+      - run: pnpm --filter @i-yolo/jimu-desktop test:security
+      - run: pnpm --filter @i-yolo/jimu-desktop build
+      - run: node scripts/jimu-audit.mjs --base upstream/master
+      - run: brew install gitleaks
+      - run: gitleaks dir . --redact --no-banner --exit-code 1
+      - run: gitleaks git . --redact --no-banner --log-opts="upstream/master..HEAD" --exit-code 1

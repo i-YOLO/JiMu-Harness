@@ -582,7 +582,9 @@ function verifyBuildTimePins(): void {
 }
 
 /** SPDX identifiers this project may ship without further review. */
-const PERMISSIVE_LICENSES = new Set(['MIT', 'ISC', 'BSD-2-Clause', 'BSD-3-Clause', 'Apache-2.0', '0BSD', 'Unlicense', 'CC0-1.0', 'BlueOak-1.0.0', 'Python-2.0'])
+// OFL-1.1 is approved only for distributed font assets. JiMu packaging keeps
+// each Fontsource license alongside the bundled WOFF/WOFF2 resources.
+const PERMISSIVE_LICENSES = new Set(['MIT', 'ISC', 'BSD-2-Clause', 'BSD-3-Clause', 'Apache-2.0', '0BSD', 'Unlicense', 'CC0-1.0', 'BlueOak-1.0.0', 'Python-2.0', 'OFL-1.1'])
 
 /** Evaluate a parsed SPDX expression under the repository's license policy. */
 function isPermissiveSpdx(expression: ReturnType<typeof parseSpdx>): boolean {

@@ -1,0 +1,162 @@
+{
+  "name": "@i-yolo/jimu-desktop",
+  "description": "JiMu macOS desktop application over the DeepSeek Harness host",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/main/index.js",
+  "scripts": {
+    "build": "pnpm run build:renderer && pnpm run build:main",
+    "prepare:knowledge-template": "node scripts/prepare-knowledge-template.mjs",
+    "prepare:knowledge-template:release": "JIMU_KNOWLEDGE_RELEASE_MODE=1 node scripts/prepare-knowledge-template.mjs",
+    "build:renderer": "vite build",
+    "build:main": "tsc --noEmit && tsdown",
+    "dev": "pnpm run prepare:knowledge-template && pnpm run build && electron .",
+    "start": "electron .",
+    "pack:mac": "pnpm run prepare:knowledge-template:release && pnpm run build && electron-builder --mac dir --arm64",
+    "dist:mac": "pnpm run prepare:knowledge-template:release && pnpm run build && electron-builder --mac dmg --arm64",
+    "test": "vitest run tests/plugin-manager.spec.ts tests/knowledge-setup.spec.ts",
+    "test:e2e": "node --test --test-concurrency=1 tests/*.e2e.test.mjs",
+    "test:packaged": "node scripts/smoke-packaged.mjs",
+    "test:security": "node --test tests/security.test.mjs"
+  },
+  "dependencies": {
+    "@deepseek-ai/cordis-plugin-group": "workspace:^",
+    "@deepseek-ai/dsh": "workspace:^",
+    "@deepseek-ai/dsh-anonymous-user-id": "workspace:^",
+    "@deepseek-ai/dsh-app-boot": "workspace:^",
+    "@deepseek-ai/dsh-atomic-write": "workspace:^",
+    "@deepseek-ai/dsh-bash-local": "workspace:^",
+    "@deepseek-ai/dsh-code-runtime": "workspace:^",
+    "@deepseek-ai/dsh-compaction": "workspace:^",
+    "@deepseek-ai/dsh-fs": "workspace:^",
+    "@deepseek-ai/dsh-host-apiproxy": "workspace:^",
+    "@deepseek-ai/dsh-invariants": "workspace:^",
+    "@deepseek-ai/dsh-output-retention": "workspace:^",
+    "@deepseek-ai/dsh-sandbox": "workspace:^",
+    "@deepseek-ai/dsh-scope": "workspace:^",
+    "@deepseek-ai/dsh-session-telemetry": "workspace:^",
+    "@deepseek-ai/dsh-session-title-llm": "workspace:^",
+    "@deepseek-ai/dsh-shell": "workspace:^",
+    "@deepseek-ai/dsh-spill": "workspace:^",
+    "@deepseek-ai/dsh-subagent-in-process-driver": "workspace:^",
+    "@deepseek-ai/dsh-subprocess": "workspace:^",
+    "@deepseek-ai/dsh-timeout": "workspace:^",
+    "@deepseek-ai/dsh-workflow": "workspace:^"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.0",
+    "@types/react": "~18.3.1",
+    "@types/react-dom": "~18.3.0",
+    "@vitejs/plugin-react": "^4.7.0",
+    "electron": "43.4.0",
+    "electron-builder": "26.15.7",
+    "playwright": "^1.49.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tsdown": "^0.22.2",
+    "typescript": "^6.0.3",
+    "vite": "6.4.2",
+    "vitest": "^4.1.8"
+  },
+  "build": {
+    "appId": "com.iyolo.jimu",
+    "productName": "JiMu",
+    "electronDist": "node_modules/electron/dist",
+    "artifactName": "JiMu-${version}-arm64.${ext}",
+    "asar": false,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "config/**/*",
+      "package.json",
+      "!**/node_modules/**/{example,examples,test,tests,__tests__,website}/**/*",
+      "!**/node_modules/**/*.{d.ts,d.ts.map,map,ts,tsx}",
+      "!**/node_modules/@deepseek-ai/dsh-client-*/**/*",
+      "!**/node_modules/@deepseek-ai/dsh-web-frontend/**/*",
+      "!**/node_modules/@deepseek-ai/**/lib/client.*"
+    ],
+    "afterPack": "scripts/after-pack.mjs",
+    "extraResources": [
+      {
+        "from": "../jimu-ui-preview/scripts",
+        "to": "jimu-knowledge",
+        "filter": [
+          "**/*.mjs"
+        ]
+      },
+      {
+        "from": "../jimu-ui-preview/shared",
+        "to": "shared",
+        "filter": [
+          "**/*.mjs"
+        ]
+      },
+      {
+        "from": "build-cache/jimu-knowledge-template",
+        "to": "jimu-knowledge-template"
+      },
+      {
+        "from": "../jimu-ui-preview/public/assets/jimu-app-icon.png",
+        "to": "jimu-icon.png"
+      },
+      {
+        "from": "../../LICENSE",
+        "to": "LICENSE"
+      },
+      {
+        "from": "../../THIRD_PARTY_NOTICES.md",
+        "to": "THIRD_PARTY_NOTICES.md"
+      },
+      {
+        "from": "../../TRADEMARKS.md",
+        "to": "TRADEMARKS.md"
+      },
+      {
+        "from": "../jimu-ui-preview/node_modules/@fontsource/ibm-plex-mono/LICENSE",
+        "to": "licenses/IBM-Plex-Mono-OFL-1.1.txt"
+      },
+      {
+        "from": "../jimu-ui-preview/node_modules/@fontsource/noto-sans-sc/LICENSE",
+        "to": "licenses/Noto-Sans-SC-OFL-1.1.txt"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "icon": "build/JiMu.icns",
+      "identity": "-",
+      "hardenedRuntime": false,
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ]
+    },
+    "dmg": {
+      "title": "JiMu ${version}",
+      "backgroundColor": "#f4e8ce",
+      "window": {
+        "width": 560,
+        "height": 380
+      },
+      "contents": [
+        {
+          "x": 150,
+          "y": 190,
+          "type": "file"
+        },
+        {
+          "x": 410,
+          "y": 190,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    }
+  }
+}

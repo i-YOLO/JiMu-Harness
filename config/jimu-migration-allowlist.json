@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "source": "read-only JiMu development checkout",
+  "allowedRoots": [
+    "apps/jimu-desktop/build/JiMu.icns",
+    "apps/jimu-desktop/config",
+    "apps/jimu-desktop/index.html",
+    "apps/jimu-desktop/package.json",
+    "apps/jimu-desktop/scripts",
+    "apps/jimu-desktop/src",
+    "apps/jimu-desktop/tests",
+    "apps/jimu-desktop/tsconfig.json",
+    "apps/jimu-desktop/tsdown.config.ts",
+    "apps/jimu-desktop/vite.config.ts",
+    "apps/jimu-ui-preview/index.html",
+    "apps/jimu-ui-preview/package.json",
+    "apps/jimu-ui-preview/public/assets",
+    "apps/jimu-ui-preview/scripts",
+    "apps/jimu-ui-preview/shared",
+    "apps/jimu-ui-preview/src",
+    "apps/jimu-ui-preview/tests",
+    "apps/jimu-ui-preview/vite.config.mjs"
+  ],
+  "deniedNames": [
+    ".env",
+    "node_modules",
+    "dist",
+    "release",
+    "artifacts",
+    "design-qa.md",
+    "migrate-factory-assets.mjs"
+  ]
+}
