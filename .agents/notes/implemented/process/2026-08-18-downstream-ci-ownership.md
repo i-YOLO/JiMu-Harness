@@ -12,7 +12,7 @@ Synthetic credential fixtures create a second ambiguity. Secret scanners correct
 
 ## Decision
 
-`JiMu downstream gates` is the only automatic product workflow owned by the downstream repository. It exposes three stable jobs: a source and history security scan, a bounded Node 24 upstream-compatibility run, and a macOS JiMu Desktop build and test run. The workflow is reusable, so the manual macOS release repeats the same jobs before building, mounting, auditing, checksumming, and publishing a DMG from the exact `main` commit.
+`JiMu downstream gates` is the only automatic product workflow owned by the downstream repository. It exposes three stable jobs: a source and history security scan, a bounded Node 24 upstream-compatibility run, and a macOS JiMu Desktop build and test run. The workflow is reusable, so the manual macOS release repeats the same jobs before building, mounting, auditing, checksumming, and publishing a DMG from the exact `main` commit. JiMu-owned remote actions use reviewed full commit SHAs and current Node 24-compatible action runtimes.
 
 Gitleaks runs before dependency installation, loads `.gitleaks.toml` explicitly, and scans both the source tree and `upstream/master..HEAD`. The allowlist names reviewed upstream fixture paths; it does not suppress a rule or an arbitrary credential value. Generated dependency, build, coverage, and release directories are excluded from the source scan and are handled by the release audit instead. A temporary high-entropy negative control proves on every run that a newly introduced credential still fails the job.
 
