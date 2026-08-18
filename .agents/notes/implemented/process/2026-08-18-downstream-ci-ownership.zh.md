@@ -16,6 +16,8 @@ JiMu 保留 DeepSeek Harness 的完整源码历史，其中包含依赖上游组
 
 Electron Builder 根据 Manifest 中锁定的 Electron 版本解析发行文件。打包配置不得将 `electronDist` 指向工作区本地 `node_modules` 路径，因为 pnpm 的 CI 布局不保证该路径存在。
 
+桌面子包声明公开仓库元数据，并通过 `--publish never` 调用 Electron Builder。工作流不会向构建、冒烟或审计步骤暴露 `GH_TOKEN`；Token 只用于检查 Release 是否存在，以及最终的 `gh release create` 命令。这样既阻止 Electron Builder 推断隐式发布目标，也保留显式 GitHub Release 操作所需的授权。
+
 Gitleaks 在安装依赖前运行，显式读取 `.gitleaks.toml`，并同时扫描源码树和 `upstream/master..HEAD`。白名单只列出经过审查的上游 Fixture 路径，不会全局关闭规则，也不会按任意凭据值放行。依赖、构建、覆盖率和发布生成目录不进入源码扫描，改由发布审计处理。每次运行还会创建临时高熵负向样例，证明新引入的凭据仍会让 Job 失败。
 
 每个上游专用工作流的独立 Job 都会校验 `github.repository` 是否为 `deepseek-harness/deepseek-harness`。守卫合入后，JiMu 仓库还会停用这些工作流。源码继续保留以便同步上游，而 JiMu Pull Request 只为下游 Job 与 CodeQL 消耗 Runner。

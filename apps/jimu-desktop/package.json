@@ -3,6 +3,11 @@
   "description": "JiMu macOS desktop application over the DeepSeek Harness host",
   "version": "0.1.1",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/i-YOLO/JiMu-Harness.git",
+    "directory": "apps/jimu-desktop"
+  },
   "type": "module",
   "main": "dist/main/index.js",
   "scripts": {
@@ -14,7 +19,7 @@
     "dev": "pnpm run prepare:knowledge-template && pnpm run build && electron .",
     "start": "electron .",
     "pack:mac": "pnpm run prepare:knowledge-template:release && pnpm run build && electron-builder --mac dir --arm64",
-    "dist:mac": "pnpm run prepare:knowledge-template:release && pnpm run build && electron-builder --mac dmg --arm64",
+    "dist:mac": "pnpm run prepare:knowledge-template:release && pnpm run build && electron-builder --mac dmg --arm64 --publish never",
     "test": "vitest run tests/plugin-manager.spec.ts tests/knowledge-setup.spec.ts tests/knowledge-installer.spec.ts",
     "test:e2e": "node --test --test-concurrency=1 tests/*.e2e.test.mjs",
     "test:packaged": "node scripts/smoke-packaged.mjs",
