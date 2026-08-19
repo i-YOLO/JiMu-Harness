@@ -382,6 +382,21 @@ async function allowBuilds(profileDir: string, packages: readonly string[]): Pro
   await writeFile(path, `${current.trimEnd()}\n\nallowBuilds:\n${rows}\n`, { encoding: 'utf8', mode: 0o600 })
 }
 
+function readAllowedBuildPackages(workspace: string): string[] {
+  const packages: string[] = []
+  let inside = false
+  for (const line of workspace.split(/\r?\n/u)) {
+    if (!inside) {
+      if (/^allowBuilds:\s*$/u.test(line)) inside = true
+      continue
+    }
+    if (/^\S/u.test(line)) break
+    const key = /^\s{2}("(?:[^"\\]|\\.)*"|[^:#][^:]*):\s*true\s*$/u.exec(line)?.[1]
+    if (key !== undefined) packages.push(key.startsWith('"') ? JSON.parse(key) as string : key.trim())
+  }
+  return packages
+}
+
 async function copyProfile(profileDir: string): Promise<StagedProfile> {
   const parent = dirname(profileDir)
   await mkdir(parent, { recursive: true })
@@ -391,9 +406,13 @@ async function copyProfile(profileDir: string): Promise<StagedProfile> {
   if (process.platform === 'win32') {
     const modulesPath = join(staged, 'node_modules', '.modules.yaml')
     try {
-      const modules = JSON.parse(await readFile(modulesPath, 'utf8')) as JsonRecord
-      modules.virtualStoreDir = join(staged, 'node_modules', '.pnpm')
-      await writeFile(modulesPath, `${JSON.stringify(modules, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 })
+      await stat(modulesPath)
+      await runPnpm({ cwd: staged, args: ['install', '--ignore-scripts', '--offline', '--force'] })
+      const workspace = await readFile(join(staged, 'pnpm-workspace.yaml'), 'utf8')
+      const allowedBuildPackages = readAllowedBuildPackages(workspace)
+      if (allowedBuildPackages.length > 0) {
+        await runPnpm({ cwd: staged, args: ['rebuild', ...allowedBuildPackages] })
+      }
     } catch (error) {
       const code = error instanceof Error && 'code' in error ? error.code : undefined
       if (code !== 'ENOENT') throw error
