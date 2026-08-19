@@ -55,7 +55,7 @@
     "@deepseek-ai/dsh-timeout": "workspace:^",
     "@deepseek-ai/dsh-tools": "workspace:^",
     "@deepseek-ai/dsh-workflow": "workspace:^",
-    "pnpm": "11.7.0",
+    "pnpm": "11.8.0",
     "semver": "^7.7.3"
   },
   "devDependencies": {
