@@ -1,6 +1,6 @@
 import { createReadStream, createWriteStream, readFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
-import { appendFile, lstat, mkdir, readFile, readdir, realpath, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { appendFile, lstat, mkdir, readFile, readdir, realpath, rename, stat, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
@@ -60,6 +60,7 @@ import {
   listInstalledPlugins,
   parsePluginCatalog,
   proposalFromInspection,
+  removePluginTree,
   searchPluginCatalog,
   stagePluginEnablement,
   stagePluginInstall,
@@ -1495,7 +1496,7 @@ async function runPluginMutation(
     const stage = await createStage(pluginOperationAbort.signal, onOutput)
     setPluginOperation({ phase: 'validating', progress: 70, message: '插件已安装，正在验证 DSH Bundle' })
     if (pluginOperationAbort.signal.aborted) {
-      await rm(stage.root, { recursive: true, force: true })
+      await removePluginTree(stage.root)
       throw new Error('插件操作已取消')
     }
     setPluginOperation({ phase: 'restarting', progress: 85, message: '正在切换 Profile 并重启 Harness' })

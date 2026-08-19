@@ -7,6 +7,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { _electron as electron } from "playwright";
 
+import { waitForHarnessReady } from "./electron-ready.mjs";
 import { createKnowledgeFixture } from "./knowledge-fixture.mjs";
 import { createPluginRegistryFixture, FIXTURE_PLUGIN_NAME } from "./plugin-registry-fixture.mjs";
 
@@ -120,7 +121,7 @@ async function launch(t, environment = {}, settings = null) {
   const page = await electronApp.firstWindow();
   await page.waitForLoadState("domcontentloaded");
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.waitForFunction(async () => (await window.jimu.harness.status()).phase === "ready", null, { timeout: 60_000 });
+  await waitForHarnessReady(page);
   return { electronApp, page };
 }
 
@@ -185,9 +186,6 @@ test("an anonymous empty Schema 1 knowledge root indexes all public categories a
   const setup = await page.evaluate(() => window.jimu.knowledge.getSetup());
   assert.equal(setup.phase, "ready");
   assert.equal(setup.compatibility, "schema-1");
-  await page.waitForFunction(async () => {
-    try { await window.jimu.harness.call("workspace.list", {}); return true; } catch { return false; }
-  }, null, { timeout: 60_000 });
   const workspaces = await page.evaluate(() => window.jimu.harness.call("workspace.list", {}));
   assert.ok(workspaces.items.some((workspace) => workspace.path === setup.root));
   const snapshot = await page.evaluate(() => window.jimu.knowledge.getOverview());
@@ -296,16 +294,13 @@ test("Agent conversation prepares a plugin proposal but waits for human installa
     deepSeekTested: true,
   });
 
-  await page.waitForFunction(async () => {
-    try { await window.jimu.harness.call("workspace.list", {}); return true; } catch { return false; }
-  }, null, { timeout: 60_000 });
   const sessionId = await page.evaluate(async () => {
     const workspaces = await window.jimu.harness.call("workspace.list", {});
     const session = await window.jimu.harness.call("session.create", { workspaceId: workspaces.items[0].workspaceId });
     return session.sessionId;
   });
   await page.reload();
-  await page.waitForFunction(async () => (await window.jimu.harness.status()).phase === "ready", null, { timeout: 60_000 });
+  await waitForHarnessReady(page);
   await page.getByRole("button", { name: /01 AGENT/ }).click();
   await page.locator(".composer textarea").fill("帮我安装 jimu-fixture-plugin");
   await page.getByRole("button", { name: "发送消息" }).click();
@@ -342,7 +337,7 @@ test("a running Agent turn exposes Stop until cancellation settles", { timeout: 
     return session.sessionId;
   });
   await page.reload();
-  await page.waitForFunction(async () => (await window.jimu.harness.status()).phase === "ready", null, { timeout: 60_000 });
+  await waitForHarnessReady(page);
   await page.getByRole("button", { name: /01 AGENT/ }).click();
   await page.locator(".composer textarea").fill("Keep this turn open until I stop it.");
   await page.getByRole("button", { name: "发送消息" }).click();

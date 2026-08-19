@@ -91,6 +91,8 @@ export interface StagedProfile {
   profileDir: string
 }
 
+const WINDOWS_FILE_RETRY_MS = 5_000
+
 const require = createRequire(import.meta.url)
 
 function record(value: unknown): JsonRecord | undefined {
@@ -389,6 +391,21 @@ async function copyProfile(profileDir: string): Promise<StagedProfile> {
   return { root, profileDir: staged }
 }
 
+/** Remove a plugin staging tree, retrying transient Windows file locks for a bounded interval. */
+export async function removePluginTree(target: string): Promise<void> {
+  const deadline = Date.now() + (process.platform === 'win32' ? WINDOWS_FILE_RETRY_MS : 0)
+  while (true) {
+    try {
+      await rm(target, { recursive: true, force: true })
+      return
+    } catch (error) {
+      const code = error instanceof Error && 'code' in error ? error.code : undefined
+      if (Date.now() >= deadline || (code !== 'EPERM' && code !== 'EACCES' && code !== 'EBUSY')) throw error
+      await new Promise(resolveDelay => setTimeout(resolveDelay, 100))
+    }
+  }
+}
+
 function setBundle(manifest: PackageManifest, packageName: string, enabled: boolean): void {
   const current = manifest.dsh?.profile?.bundles ?? []
   const next = current.filter(name => name !== packageName)
@@ -434,7 +451,7 @@ export async function stagePluginInstall(
     await writeManifest(profileManifestPath, profileManifest)
     return stage
   } catch (error) {
-    await rm(stage.root, { recursive: true, force: true })
+    await removePluginTree(stage.root)
     throw error
   }
 }
@@ -453,7 +470,7 @@ export async function stagePluginRemoval(
     await writeManifest(manifestPath, manifest)
     return stage
   } catch (error) {
-    await rm(stage.root, { recursive: true, force: true })
+    await removePluginTree(stage.root)
     throw error
   }
 }
@@ -468,7 +485,7 @@ export async function stagePluginEnablement(profileDir: string, packageName: str
     await writeManifest(manifestPath, manifest)
     return stage
   } catch (error) {
-    await rm(stage.root, { recursive: true, force: true })
+    await removePluginTree(stage.root)
     throw error
   }
 }
@@ -522,16 +539,16 @@ export async function activateStagedProfile(
     }
   }
   const backup = `${currentProfile}.jimu-backup`
-  await rm(backup, { recursive: true, force: true })
+  await removePluginTree(backup)
   await stop()
   try {
     await renameProfile(currentProfile, backup)
     await renameProfile(staged.profileDir, currentProfile)
     await start()
-    await rm(backup, { recursive: true, force: true })
-    await rm(staged.root, { recursive: true, force: true })
+    await removePluginTree(backup)
+    await removePluginTree(staged.root)
   } catch (error) {
-    await rm(currentProfile, { recursive: true, force: true })
+    await removePluginTree(currentProfile)
     try { await renameProfile(backup, currentProfile) } catch { /* start below reports the combined failure */ }
     try { await start() } catch (restoreError) {
       throw new AggregateError([error, restoreError], '插件 Profile 激活和回滚均失败')

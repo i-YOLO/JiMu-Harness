@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { _electron as electron } from "playwright";
+import { waitForHarnessReady, waitForPluginInventory } from "../tests/electron-ready.mjs";
 import { createPluginRegistryFixture, FIXTURE_PLUGIN_NAME } from "../tests/plugin-registry-fixture.mjs";
 
 const appRoot = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
@@ -58,8 +59,8 @@ try {
     env: isolatedEnvironment,
   });
   const page = await electronApp.firstWindow();
-  await page.waitForFunction(async () => (await window.jimu.harness.status()).phase === "ready", null, { timeout: 60_000 });
-  await page.waitForFunction(async () => (await window.jimu.plugins.snapshot()).entries.length > 0, null, { timeout: 30_000 });
+  await waitForHarnessReady(page);
+  await waitForPluginInventory(page);
   const result = await page.evaluate(async () => ({
     platform: window.jimu.platform,
     harness: await window.jimu.harness.status(),
