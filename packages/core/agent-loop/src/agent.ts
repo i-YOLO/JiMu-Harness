@@ -40,10 +40,18 @@ type Phase =
   | {
     kind: 'maintenance'
     abort: AbortController
+    cancelCause?: AgentCancelCause
     lastTurn: number
     wakeRequested: boolean
   }
-  | { kind: 'running'; abort: AbortController; turn: number; step: number; wakeRequested: boolean }
+  | {
+    kind: 'running'
+    abort: AbortController
+    cancelCause?: AgentCancelCause
+    turn: number
+    step: number
+    wakeRequested: boolean
+  }
 
 type StepEndReason = Extract<TurnEndReason, { kind: 'completed' | 'max-tokens' }>
 
@@ -58,6 +66,16 @@ function requestProposal(header: EpochHeader): LlmCallConfig {
   if (header.adapterDefaults.reasoningEffort === true) delete proposal.reasoningEffort
   if (header.adapterDefaults.maxTokens === true) delete proposal.maxTokens
   return proposal
+}
+
+/** Detach the durable cause from the object carried through AbortSignal consumers. */
+function snapshotCancelCause(cause: AgentCancelCause): AgentCancelCause {
+  switch (cause.kind) {
+    case 'user': return { kind: 'user' }
+    case 'parent': return { kind: 'parent' }
+    case 'disposed': return { kind: 'disposed' }
+    case 'hook': return { kind: 'hook', reason: cause.reason }
+  }
 }
 
 /** Drives one session through turn and step boundaries. */
@@ -136,7 +154,10 @@ export class ReactLoopAgent implements Agent {
       this.inbox.clear()
       if (this.phase.kind !== 'idle') this.phase.wakeRequested = false
     }
-    if (this.phase.kind !== 'idle') this.phase.abort.abort(cause)
+    if (this.phase.kind !== 'idle' && !this.phase.abort.signal.aborted) {
+      this.phase.cancelCause = snapshotCancelCause(cause)
+      this.phase.abort.abort(cause)
+    }
   }
 
   runMaintenance<T>(job: (signal: AbortSignal) => Promise<T>): Promise<T> {
@@ -174,8 +195,7 @@ export class ReactLoopAgent implements Agent {
       // Maintenance and aborted drivers cannot deliver the wake: latch it for
       // replay at convergence. Live drivers claim queued work themselves;
       // disposal never latches, so teardown waits on no model turn.
-      const reason = this.phase.abort.signal.reason as AgentCancelCause | undefined
-      if (reason?.kind !== 'disposed' && (this.phase.kind === 'maintenance' || wakeAfterAbort)) {
+      if (this.phase.cancelCause?.kind !== 'disposed' && (this.phase.kind === 'maintenance' || wakeAfterAbort)) {
         this.phase.wakeRequested = true
       }
       return
@@ -301,7 +321,9 @@ export class ReactLoopAgent implements Agent {
       }
     } catch (error: unknown) {
       if (signal.aborted) {
-        turnEnds = { kind: 'aborted', reason: signal.reason as AgentCancelCause }
+        /* v8 ignore next -- this controller is private and only Agent.cancel aborts it after recording the cause. */
+        if (phase.cancelCause === undefined) throw new Error(`agent "${this.id}": aborted turn has no cancellation cause`)
+        turnEnds = { kind: 'aborted', reason: phase.cancelCause }
         throw error
       }
       // Every failure is structured: an `LlmError` keeps its facts, anything
