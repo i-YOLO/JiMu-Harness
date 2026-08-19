@@ -51,6 +51,38 @@ async function startStalledLlm(t) {
   return { url: `http://127.0.0.1:${address.port}`, started, closed };
 }
 
+async function startPluginProposalLlm(t) {
+  let requests = 0;
+  const server = createServer((request, response) => {
+    if (!request.url?.endsWith("/chat/completions")) {
+      response.writeHead(404).end();
+      return;
+    }
+    requests += 1;
+    response.writeHead(200, { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache" });
+    const send = (payload) => response.write(`data: ${JSON.stringify(payload)}\n\n`);
+    if (requests === 1) {
+      send({ choices: [{ delta: { role: "assistant", tool_calls: [{ index: 0, id: "plugin-proposal", type: "function", function: { name: "jimu_plugin_prepare_install", arguments: '{"source":"jimu-fixture-plugin"}' } }] } }] });
+      send({ choices: [{ delta: {}, finish_reason: "tool_calls" }] });
+    } else {
+      send({ choices: [{ delta: { role: "assistant", content: "插件安装提案已经准备好，请在卡片中确认。" } }] });
+      send({ choices: [{ delta: {}, finish_reason: "stop" }] });
+    }
+    response.end("data: [DONE]\n\n");
+  });
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const address = server.address();
+  if (address === null || typeof address === "string") throw new Error("plugin proposal LLM did not bind");
+  t.after(async () => {
+    server.closeAllConnections();
+    await new Promise((resolve) => server.close(resolve));
+  });
+  return { url: `http://127.0.0.1:${address.port}`, requests: () => requests };
+}
+
 async function startPluginRegistry(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), "jimu-plugin-registry-"));
   const packageDir = path.join(root, "fixture-plugin");
@@ -271,6 +303,47 @@ test("the native plugin market installs, restarts, lists and uninstalls an isola
   page.once("dialog", dialog => dialog.accept());
   await page.getByRole("button", { name: "卸载 jimu-fixture-plugin" }).click();
   await page.getByText("尚未安装外部插件", { exact: true }).waitFor({ timeout: 60_000 });
+});
+
+test("Agent conversation prepares a plugin proposal but waits for human installation", { timeout: 120_000 }, async (t) => {
+  const fixture = await createKnowledgeFixture("jimu-plugin-agent-e2e-");
+  const registry = await startPluginRegistry(t);
+  const llm = await startPluginProposalLlm(t);
+  t.after(() => rm(fixture.container, { recursive: true, force: true }));
+  const { page } = await launch(t, {
+    JIMU_KNOWLEDGE_ROOT: fixture.root,
+    DEEPSEEK_API_KEY: "fixture-key",
+    DEEPSEEK_BASE_URL: llm.url,
+    JIMU_PLUGIN_CATALOG_URL: registry.catalogUrl,
+    JIMU_PLUGIN_REGISTRY_URL: registry.registryUrl,
+  }, {
+    onboardingVersion: 1,
+    knowledgeRoot: fixture.root,
+    knowledgeModules: { benchmarks: true, factory: true },
+    knowledgeSource: "existing",
+    deepSeekTested: true,
+  });
+
+  await page.waitForFunction(async () => {
+    try { await window.jimu.harness.call("workspace.list", {}); return true; } catch { return false; }
+  }, null, { timeout: 60_000 });
+  const sessionId = await page.evaluate(async () => {
+    const workspaces = await window.jimu.harness.call("workspace.list", {});
+    const session = await window.jimu.harness.call("session.create", { workspaceId: workspaces.items[0].workspaceId });
+    return session.sessionId;
+  });
+  await page.reload();
+  await page.waitForFunction(async () => (await window.jimu.harness.status()).phase === "ready", null, { timeout: 60_000 });
+  await page.getByRole("button", { name: /01 AGENT/ }).click();
+  await page.locator(".composer textarea").fill("帮我安装 jimu-fixture-plugin");
+  await page.getByRole("button", { name: "发送消息" }).click();
+  await page.getByText("插件安装提案 · jimu-fixture-plugin", { exact: true }).waitFor({ timeout: 30_000 });
+  await page.getByRole("button", { name: "确认安装" }).waitFor();
+  assert.ok(llm.requests() >= 2);
+  const snapshot = await page.evaluate(() => window.jimu.plugins.snapshot());
+  assert.equal(snapshot.installedPackages.some((plugin) => plugin.packageName === "jimu-fixture-plugin"), false);
+  const history = await page.evaluate((id) => window.jimu.harness.call("session.history", { sessionId: id, maxMessages: 100 }), sessionId);
+  assert.ok(history.events.some((entry) => (entry.event ?? entry).type === "tool/result"));
 });
 
 test("a running Agent turn exposes Stop until cancellation settles", { timeout: 120_000 }, async (t) => {

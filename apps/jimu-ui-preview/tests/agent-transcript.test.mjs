@@ -74,7 +74,7 @@ test("streaming, reasoning and tool calls retain Harness event boundaries", () =
       view: { for: "call", view: { card: "generic", title: "读取 App.jsx", kind: "read", rawInput: "App.jsx" } },
     },
     {
-      event: { type: "tool/result", seq: 4, data: { turn: 2, step: 1, callId: "read-1", content: [{ type: "text", text: "读取完成" }] } },
+      event: { type: "tool/result", seq: 4, data: { turn: 2, step: 1, message: { source: { kind: "tool", callId: "read-1" }, content: [{ type: "tool-result", toolCallId: "read-1", content: [{ type: "text", text: "读取完成" }] }] } } },
       view: { for: "result", view: { card: "generic", title: "已读取 App.jsx", content: [{ type: "text", text: "280 行" }] } },
     },
     { type: "assistant/message", seq: 5, data: { turn: 2, step: 1, content: [{ type: "reasoning", text: "先保留事件语义" }, { type: "text", text: "处理完成" }] } },
