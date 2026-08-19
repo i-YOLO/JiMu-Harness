@@ -82,6 +82,7 @@ interface InspectResult {
 interface PnpmRunOptions {
   cwd: string
   args: string[]
+  env?: NodeJS.ProcessEnv
   signal?: AbortSignal
   onOutput?: (line: string) => void
 }
@@ -318,7 +319,7 @@ async function runPnpm(options: PnpmRunOptions): Promise<void> {
   const child = spawn(runtime, [pnpmCliPath(), ...options.args], {
     cwd: options.cwd,
     detached: process.platform !== 'win32',
-    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+    env: { ...process.env, ...options.env, ELECTRON_RUN_AS_NODE: '1' },
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
   })
@@ -397,7 +398,7 @@ function readAllowedBuildPackages(workspace: string): string[] {
   return packages
 }
 
-async function copyProfile(profileDir: string): Promise<StagedProfile> {
+async function copyProfile(profileDir: string, registry?: string): Promise<StagedProfile> {
   const parent = dirname(profileDir)
   await mkdir(parent, { recursive: true })
   const root = await mkdtemp(join(parent, '.jimu-plugin-stage-'))
@@ -407,7 +408,12 @@ async function copyProfile(profileDir: string): Promise<StagedProfile> {
     const modulesPath = join(staged, 'node_modules', '.modules.yaml')
     try {
       await stat(modulesPath)
-      await runPnpm({ cwd: staged, args: ['install', '--ignore-scripts', '--offline', '--force'] })
+      const registryEnv = registry === undefined ? undefined : { npm_config_registry: registry }
+      await runPnpm({
+        cwd: staged,
+        args: ['install', '--ignore-scripts', '--offline', '--force'],
+        ...(registryEnv === undefined ? {} : { env: registryEnv }),
+      })
       const workspace = await readFile(join(staged, 'pnpm-workspace.yaml'), 'utf8')
       const allowedBuildPackages = readAllowedBuildPackages(workspace)
       if (allowedBuildPackages.length > 0) {
@@ -451,7 +457,7 @@ export async function stagePluginInstall(
 ): Promise<StagedProfile> {
   if (proposal.expiresAt < Date.now()) throw new Error('插件安装提案已过期，请重新检查')
   if (!exactAllowed(proposal.buildPackages, allowedBuildPackages)) throw new Error('构建脚本授权与安装提案不一致')
-  const stage = await copyProfile(profileDir)
+  const stage = await copyProfile(profileDir, options.registry)
   try {
     const registryArgs = options.registry === undefined ? [] : ['--registry', options.registry]
     await runPnpm({
@@ -489,11 +495,17 @@ export async function stagePluginInstall(
 export async function stagePluginRemoval(
   profileDir: string,
   packageName: string,
-  options: { signal?: AbortSignal; onOutput?: (line: string) => void } = {},
+  options: { signal?: AbortSignal; onOutput?: (line: string) => void; registry?: string } = {},
 ): Promise<StagedProfile> {
-  const stage = await copyProfile(profileDir)
+  const stage = await copyProfile(profileDir, options.registry)
   try {
-    await runPnpm({ cwd: stage.profileDir, args: ['remove', packageName], ...options })
+    await runPnpm({
+      cwd: stage.profileDir,
+      args: ['remove', packageName],
+      ...(options.registry === undefined ? {} : { env: { npm_config_registry: options.registry } }),
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+      ...(options.onOutput === undefined ? {} : { onOutput: options.onOutput }),
+    })
     const manifestPath = join(stage.profileDir, 'package.json')
     const manifest = await readManifest(manifestPath)
     setBundle(manifest, packageName, false)
@@ -505,8 +517,13 @@ export async function stagePluginRemoval(
   }
 }
 
-export async function stagePluginEnablement(profileDir: string, packageName: string, enabled: boolean): Promise<StagedProfile> {
-  const stage = await copyProfile(profileDir)
+export async function stagePluginEnablement(
+  profileDir: string,
+  packageName: string,
+  enabled: boolean,
+  options: { registry?: string } = {},
+): Promise<StagedProfile> {
+  const stage = await copyProfile(profileDir, options.registry)
   try {
     if (enabled) await validateBundle(stage.profileDir, packageName)
     const manifestPath = join(stage.profileDir, 'package.json')

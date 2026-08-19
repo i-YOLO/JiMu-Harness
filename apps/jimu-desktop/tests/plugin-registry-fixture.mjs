@@ -60,6 +60,7 @@ export async function createPluginRegistryFixture() {
       response.setHeader("content-type", "application/json");
       response.end(JSON.stringify({
         "dist-tags": { latest: "1.0.0" },
+        time: { created: "2020-01-01T00:00:00.000Z", modified: "2020-01-01T00:00:00.000Z", "1.0.0": "2020-01-01T00:00:00.000Z" },
         versions: { "1.0.0": {
           name: FIXTURE_PLUGIN_NAME,
           version: "1.0.0",

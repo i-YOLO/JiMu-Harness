@@ -1962,7 +1962,9 @@ function registerIpcHandlers(): void {
     if (packageName === '') throw new Error('缺少插件包名')
     const enabled = value.enabled === true
     return await runPluginMutation(enabled ? 'enable' : 'disable', packageName, value.stopRunning === true, async () =>
-      await stagePluginEnablement(join(harnessHome, 'profiles', 'web'), packageName, enabled))
+      await stagePluginEnablement(join(harnessHome, 'profiles', 'web'), packageName, enabled, {
+        registry: process.env.JIMU_PLUGIN_REGISTRY_URL ?? 'https://registry.npmjs.org',
+      }))
   })
   ipcMain.handle('jimu:plugins:uninstall', async (event, request: unknown) => {
     assertTrustedEvent(event)
@@ -1970,7 +1972,11 @@ function registerIpcHandlers(): void {
     const packageName = typeof value.packageName === 'string' ? value.packageName : ''
     if (packageName === '') throw new Error('缺少插件包名')
     return await runPluginMutation('uninstall', packageName, value.stopRunning === true, async (signal, onOutput) =>
-      await stagePluginRemoval(join(harnessHome, 'profiles', 'web'), packageName, { signal, onOutput }))
+      await stagePluginRemoval(join(harnessHome, 'profiles', 'web'), packageName, {
+        signal,
+        onOutput,
+        registry: process.env.JIMU_PLUGIN_REGISTRY_URL ?? 'https://registry.npmjs.org',
+      }))
   })
   ipcMain.handle('jimu:plugins:cancel-operation', (event, request: unknown) => {
     assertTrustedEvent(event)
