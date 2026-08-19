@@ -316,10 +316,17 @@ async function terminate(pid: number): Promise<void> {
 
 async function runPnpm(options: PnpmRunOptions): Promise<void> {
   const runtime = process.execPath
+  const registry = options.env?.NPM_CONFIG_REGISTRY ?? options.env?.npm_config_registry
+  const mergedEnv: NodeJS.ProcessEnv = { ...process.env, ...options.env, ELECTRON_RUN_AS_NODE: '1' }
+  const childEnv: NodeJS.ProcessEnv = registry === undefined
+    ? mergedEnv
+    : Object.fromEntries(Object.entries(mergedEnv)
+      .filter(([key]) => key.toLocaleLowerCase('en-US') !== 'npm_config_registry'))
+  if (registry !== undefined) childEnv.NPM_CONFIG_REGISTRY = registry
   const child = spawn(runtime, [pnpmCliPath(), ...options.args], {
     cwd: options.cwd,
     detached: process.platform !== 'win32',
-    env: { ...process.env, ...options.env, ELECTRON_RUN_AS_NODE: '1' },
+    env: childEnv,
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
   })
