@@ -77,6 +77,8 @@ jobs:
         run: pnpm run typecheck:contracts-ready
       - name: Lint
         run: pnpm run lint:contracts-ready
+      - name: Verify documentation synchronization
+        run: pnpm run doc-sync
       - name: Run core unit tests
         run: pnpm run test
 
@@ -100,6 +102,12 @@ jobs:
         run: pnpm --filter @i-yolo/jimu-desktop prepare:knowledge-template:release
       - name: Run JiMu tests
         run: pnpm run jimu:test
+      - name: Run native macOS shell cancellation tests
+        run: pnpm exec vitest run packages/shell/bash-local/tests/executor.spec.ts
+      - name: Build JiMu Desktop
+        run: pnpm --filter @i-yolo/jimu-desktop build
+      - name: Run JiMu Electron end-to-end tests
+        run: pnpm --filter @i-yolo/jimu-desktop test:e2e
       - name: Package macOS Apple Silicon application
         run: pnpm --filter @i-yolo/jimu-desktop pack:mac
       - name: Smoke-test packaged application
@@ -136,6 +144,8 @@ jobs:
           packages/shell/pwsh-sandbox/tests/acl.e2e.ts
       - name: Build JiMu Desktop
         run: pnpm --filter @i-yolo/jimu-desktop build
+      - name: Run JiMu Electron end-to-end tests
+        run: pnpm --filter @i-yolo/jimu-desktop test:e2e
       - name: Build synthetic baseline installer
         run: pnpm --filter @i-yolo/jimu-desktop exec node scripts/build-windows.mjs --version 0.1.99 --output release/baseline
       - name: Build unsigned Windows installer
