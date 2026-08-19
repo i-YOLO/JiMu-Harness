@@ -64,16 +64,22 @@ async function startStalledLlm(t) {
 }
 
 async function startPluginProposalLlm(t) {
-  let requests = 0;
-  const server = createServer((request, response) => {
+  let agentRequests = 0;
+  const server = createServer(async (request, response) => {
     if (!request.url?.endsWith("/chat/completions")) {
       response.writeHead(404).end();
       return;
     }
-    requests += 1;
+    const chunks = [];
+    for await (const chunk of request) chunks.push(chunk);
+    const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    const agentRequest = Array.isArray(body.tools) && body.tools.some((tool) => tool?.function?.name === "jimu_plugin_prepare_install");
     response.writeHead(200, { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache" });
     const send = (payload) => response.write(`data: ${JSON.stringify(payload)}\n\n`);
-    if (requests === 1) {
+    if (!agentRequest) {
+      send({ choices: [{ delta: { role: "assistant", content: "安装插件" } }] });
+      send({ choices: [{ delta: {}, finish_reason: "stop" }] });
+    } else if (++agentRequests === 1) {
       send({ choices: [{ delta: { role: "assistant", tool_calls: [{ index: 0, id: "plugin-proposal", type: "function", function: { name: "jimu_plugin_prepare_install", arguments: '{"source":"jimu-fixture-plugin"}' } }] } }] });
       send({ choices: [{ delta: {}, finish_reason: "tool_calls" }] });
     } else {
@@ -92,7 +98,7 @@ async function startPluginProposalLlm(t) {
     server.closeAllConnections();
     await new Promise((resolve) => server.close(resolve));
   });
-  return { url: `http://127.0.0.1:${address.port}`, requests: () => requests };
+  return { url: `http://127.0.0.1:${address.port}`, requests: () => agentRequests };
 }
 
 async function startPluginRegistry(t) {

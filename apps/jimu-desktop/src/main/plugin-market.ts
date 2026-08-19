@@ -388,6 +388,17 @@ async function copyProfile(profileDir: string): Promise<StagedProfile> {
   const root = await mkdtemp(join(parent, '.jimu-plugin-stage-'))
   const staged = join(root, basename(profileDir))
   await cp(profileDir, staged, { recursive: true, verbatimSymlinks: true })
+  if (process.platform === 'win32') {
+    const modulesPath = join(staged, 'node_modules', '.modules.yaml')
+    try {
+      const modules = JSON.parse(await readFile(modulesPath, 'utf8')) as JsonRecord
+      modules.virtualStoreDir = join(staged, 'node_modules', '.pnpm')
+      await writeFile(modulesPath, `${JSON.stringify(modules, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 })
+    } catch (error) {
+      const code = error instanceof Error && 'code' in error ? error.code : undefined
+      if (code !== 'ENOENT') throw error
+    }
+  }
   return { root, profileDir: staged }
 }
 
