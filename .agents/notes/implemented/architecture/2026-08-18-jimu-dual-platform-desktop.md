@@ -16,6 +16,8 @@ The Windows distribution is a one-click, per-user NSIS installer under `%LOCALAP
 
 Native builds stay on their target operating systems. Pull requests build an unsigned installer and exercise its installation lifecycle on the standard Windows x64 runner. Formal releases sign the Windows executable and installer through a protected Azure Trusted Signing environment, build the macOS DMG independently, and publish both only after every job succeeds for the same commit.
 
+Knowledge link confinement recognizes macOS system paths, Windows drive-qualified paths, UNC shares, and Windows device namespaces before resolving a link against the active root. These external absolute forms are blocked consistently, while `/03-Knowledge/...`-style paths remain explicit Knowledge-root-relative links.
+
 ## Alternatives considered
 
 **Cross-build Windows on macOS.** `node-pty` rejects the required native rebuild across operating systems, and a produced file would not prove ConPTY, ACL, NSIS, or Authenticode behavior.
@@ -26,4 +28,4 @@ Native builds stay on their target operating systems. Pull requests build an uns
 
 ## Consequences
 
-Every desktop change preserves two platform paths and keeps native CI mandatory. Windows release publication depends on an externally provisioned Azure signing account. The shared source retains macOS behavior while adding a repeatable x64 installer, platform-native shell validation, upgrade preservation, uninstall preservation, and one atomic dual-platform GitHub Release.
+Every desktop change preserves two platform paths and keeps native CI mandatory. Windows release publication depends on an externally provisioned Azure signing account. The shared source retains macOS behavior while adding a repeatable x64 installer, platform-native shell validation, cross-platform Knowledge path confinement, upgrade preservation, uninstall preservation, and one atomic dual-platform GitHub Release.

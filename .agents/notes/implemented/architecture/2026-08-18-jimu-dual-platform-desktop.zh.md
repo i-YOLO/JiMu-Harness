@@ -16,6 +16,8 @@ Windows 发行物是安装到 `%LOCALAPPDATA%\Programs\JiMu` 的当前用户一�
 
 原生构建保留在目标操作系统。Pull Request 在标准 Windows x64 runner 上构建未签名安装包并执行安装生命周期。正式发行通过受保护的 Azure Trusted Signing 环境签署 Windows 可执行文件和安装包，独立构建 macOS DMG，并且只在同一 commit 的全部任务成功后发布两端产物。
 
+Knowledge 链接约束会在相对于活动根目录解析链接前，识别 macOS 系统路径、Windows 盘符路径、UNC 共享和 Windows 设备命名空间。这些外部绝对路径会被一致拦截，而 `/03-Knowledge/...` 形式仍明确表示相对于 Knowledge 根目录的链接。
+
 ## 考虑过的替代方案
 
 **在 macOS 上交叉构建 Windows。**`node-pty` 会拒绝跨操作系统的必要原生重建，而且即使生成文件，也不能证明 ConPTY、ACL、NSIS 或 Authenticode 行为。
@@ -26,4 +28,4 @@ Windows 发行物是安装到 `%LOCALAPPDATA%\Programs\JiMu` 的当前用户一�
 
 ## 结果
 
-每项桌面改动都要维护两条平台路径，并保留强制原生 CI。Windows 正式发布依赖外部配置的 Azure 签名账号。共享源码在保持 macOS 行为的同时，提供可重复生成的 x64 安装包、平台原生 Shell 验证、升级数据保留、卸载数据保留，以及一次原子的双平台 GitHub Release。
+每项桌面改动都要维护两条平台路径，并保留强制原生 CI。Windows 正式发布依赖外部配置的 Azure 签名账号。共享源码在保持 macOS 行为的同时，提供可重复生成的 x64 安装包、平台原生 Shell 验证、跨平台 Knowledge 路径约束、升级数据保留、卸载数据保留，以及一次原子的双平台 GitHub Release。
