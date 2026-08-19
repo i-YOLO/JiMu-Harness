@@ -262,6 +262,18 @@ test("the native plugin market installs, restarts, lists and uninstalls an isola
 
   page.once("dialog", dialog => dialog.accept());
   await page.getByRole("button", { name: `卸载 ${FIXTURE_PLUGIN_NAME}` }).click();
+  let removalSnapshot;
+  for (let attempt = 0; attempt < 120; attempt += 1) {
+    removalSnapshot = await page.evaluate(() => window.jimu.plugins.snapshot());
+    if (!removalSnapshot.installedPackages.some((plugin) => plugin.packageName === FIXTURE_PLUGIN_NAME)) break;
+    if (removalSnapshot.operation?.phase === "error") {
+      throw new Error(`Plugin uninstall failed: ${removalSnapshot.operation.error ?? removalSnapshot.operation.message}`);
+    }
+    await page.waitForTimeout(500);
+  }
+  assert.equal(removalSnapshot.installedPackages.some((plugin) => plugin.packageName === FIXTURE_PLUGIN_NAME), false);
+  await page.getByRole("tab", { name: "插件市场" }).click();
+  await page.getByRole("tab", { name: "已安装插件" }).click();
   await page.getByText("尚未安装外部插件", { exact: true }).waitFor({ timeout: 60_000 });
 });
 

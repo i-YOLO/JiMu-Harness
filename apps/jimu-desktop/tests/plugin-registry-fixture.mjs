@@ -2,21 +2,23 @@ import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
+import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 
 export const FIXTURE_PLUGIN_NAME = "jimu-fixture-plugin";
+const require = createRequire(import.meta.url);
+const pnpmCli = path.join(path.dirname(require.resolve("pnpm")), "bin", "pnpm.mjs");
 
 async function packFixture(root, packageDirectory) {
-  const npm = process.platform === "win32" ? "npm.cmd" : "npm";
   await new Promise((resolve, reject) => {
-    const child = spawn(npm, ["pack", packageDirectory, "--pack-destination", root, "--silent"], {
-      shell: process.platform === "win32",
+    const child = spawn(process.execPath, [pnpmCli, "pack", "--pack-destination", root, "--silent"], {
+      cwd: packageDirectory,
       stdio: "ignore",
       windowsHide: true,
     });
     child.once("error", reject);
-    child.once("close", (code) => code === 0 ? resolve() : reject(new Error(`npm pack failed with ${code}`)));
+    child.once("close", (code) => code === 0 ? resolve() : reject(new Error(`pnpm pack failed with ${code}`)));
   });
 }
 
