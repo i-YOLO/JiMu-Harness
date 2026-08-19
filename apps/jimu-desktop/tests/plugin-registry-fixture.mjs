@@ -11,6 +11,7 @@ async function packFixture(root, packageDirectory) {
   const npm = process.platform === "win32" ? "npm.cmd" : "npm";
   await new Promise((resolve, reject) => {
     const child = spawn(npm, ["pack", packageDirectory, "--pack-destination", root, "--silent"], {
+      shell: process.platform === "win32",
       stdio: "ignore",
       windowsHide: true,
     });
