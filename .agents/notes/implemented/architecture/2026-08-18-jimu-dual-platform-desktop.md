@@ -12,7 +12,7 @@ JiMu's Electron host and release workflow assumed macOS even though the embedded
 
 JiMu ships one desktop source for macOS Apple Silicon and Windows x64. Preload exposes `macOS | Windows` as a presentation fact; Electron main owns the corresponding title bar, menu, shortcuts, and user-data default without moving existing macOS data. The Renderer uses that fact only for operating-system presentation.
 
-The Windows distribution is a one-click, per-user NSIS installer under `%LOCALAPPDATA%\Programs\JiMu`. Application data and Knowledge remain outside the installation directory and survive upgrade and uninstall. The packaged Harness selects its existing confined PowerShell stack on Windows and Bash stack on macOS.
+The Windows distribution is a one-click, per-user NSIS installer under `%LOCALAPPDATA%\Programs\JiMu`. A minimal NSIS initialization hook pins that directory because Electron Builder otherwise derives a per-user one-click folder from the scoped npm package name instead of the product name. Application data and Knowledge remain outside the installation directory and survive upgrade and uninstall. The packaged Harness selects its existing confined PowerShell stack on Windows and Bash stack on macOS.
 
 Native builds stay on their target operating systems. Pull requests build an unsigned installer and exercise its installation lifecycle on the standard Windows x64 runner. Formal releases sign the Windows executable and installer through a protected Azure Trusted Signing environment, build the macOS DMG independently, and publish both only after every job succeeds for the same commit.
 

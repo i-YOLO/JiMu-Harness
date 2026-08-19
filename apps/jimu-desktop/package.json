@@ -161,6 +161,7 @@
       "oneClick": true,
       "perMachine": false,
       "allowElevation": false,
+      "include": "build/installer.nsh",
       "createDesktopShortcut": "always",
       "createStartMenuShortcut": true,
       "shortcutName": "JiMu",

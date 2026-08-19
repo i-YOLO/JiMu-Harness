@@ -20,12 +20,13 @@ const repoRoot = path.resolve(desktopRoot, "../..");
 const run = promisify(execFile);
 
 test("desktop shell keeps the approved cross-platform Electron security posture", async () => {
-  const [html, main, preload, factoryService, manifest, overlay, policy, pluginManager, styles] = await Promise.all([
+  const [html, main, preload, factoryService, manifest, installer, overlay, policy, pluginManager, styles] = await Promise.all([
     readFile(path.join(desktopRoot, "index.html"), "utf8"),
     readFile(path.join(desktopRoot, "src/main/index.ts"), "utf8"),
     readFile(path.join(desktopRoot, "src/preload/index.ts"), "utf8"),
     readFile(path.join(repoRoot, "apps/jimu-ui-preview/scripts/factory-service.mjs"), "utf8"),
     readFile(path.join(desktopRoot, "package.json"), "utf8").then(JSON.parse),
+    readFile(path.join(desktopRoot, "build/installer.nsh"), "utf8"),
     readFile(path.join(desktopRoot, "config/desktop.cordis.yml"), "utf8"),
     readFile(path.join(desktopRoot, "config/plugin-policy.json"), "utf8"),
     readFile(path.join(desktopRoot, "src/main/plugin-manager.ts"), "utf8"),
@@ -99,7 +100,11 @@ test("desktop shell keeps the approved cross-platform Electron security posture"
   assert.equal(manifest.build.nsis.oneClick, true);
   assert.equal(manifest.build.nsis.perMachine, false);
   assert.equal(manifest.build.nsis.allowElevation, false);
+  assert.equal(manifest.build.nsis.include, "build/installer.nsh");
   assert.equal(manifest.build.nsis.deleteAppDataOnUninstall, false);
+  assert.match(installer, /!macro customInit/);
+  assert.match(installer, /StrCpy \$INSTDIR "\$LocalAppData\\Programs\\JiMu"/);
+  assert.doesNotMatch(installer, /\$PROGRAMFILES/i);
   assert.equal(manifest.build.asar, false);
   assert.ok(manifest.build.files.includes("config/**/*"));
 });
