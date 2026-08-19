@@ -424,7 +424,7 @@ async function copyProfile(profileDir: string, registry?: string): Promise<Stage
       const registryEnv = registry === undefined ? undefined : { npm_config_registry: registry }
       await runPnpm({
         cwd: staged,
-        args: ['install', '--ignore-scripts', '--offline', '--force'],
+        args: ['install', '--ignore-scripts', '--offline', '--force', '--no-frozen-lockfile'],
         ...(registryEnv === undefined ? {} : { env: registryEnv }),
       })
       const workspace = await readFile(join(staged, 'pnpm-workspace.yaml'), 'utf8')

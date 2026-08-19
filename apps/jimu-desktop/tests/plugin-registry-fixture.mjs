@@ -77,6 +77,11 @@ export async function createPluginRegistryFixture() {
       response.end(tarball);
       return;
     }
+    if (request.url === `/-/npm/v1/attestations/${FIXTURE_PLUGIN_NAME}@1.0.0`) {
+      response.setHeader("content-type", "application/json");
+      response.end(JSON.stringify({ attestations: [] }));
+      return;
+    }
     response.writeHead(503).end("fixture unavailable");
   });
   await new Promise((resolve, reject) => {
