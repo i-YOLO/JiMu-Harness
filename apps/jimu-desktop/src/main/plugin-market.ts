@@ -321,8 +321,14 @@ async function runPnpm(options: PnpmRunOptions): Promise<void> {
   const childEnv: NodeJS.ProcessEnv = registry === undefined
     ? mergedEnv
     : Object.fromEntries(Object.entries(mergedEnv)
-      .filter(([key]) => key.toLocaleLowerCase('en-US') !== 'npm_config_registry'))
-  if (registry !== undefined) childEnv.NPM_CONFIG_REGISTRY = registry
+      .filter(([key]) => {
+        const normalized = key.toLocaleLowerCase('en-US')
+        return normalized !== 'npm_config_registry' && normalized !== 'pnpm_config_registry'
+      }))
+  if (registry !== undefined) {
+    childEnv.NPM_CONFIG_REGISTRY = registry
+    childEnv.PNPM_CONFIG_REGISTRY = registry
+  }
   const child = spawn(runtime, [pnpmCliPath(), ...options.args], {
     cwd: options.cwd,
     detached: process.platform !== 'win32',
