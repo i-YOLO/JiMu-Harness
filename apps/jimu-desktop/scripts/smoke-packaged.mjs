@@ -5,7 +5,8 @@ import { fileURLToPath } from "node:url";
 import { _electron as electron } from "playwright";
 
 const appRoot = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
-const requestedTarget = process.argv[2] === undefined ? undefined : path.resolve(process.argv[2]);
+const requestedTargetArgument = process.argv[2] === "--" ? process.argv[3] : process.argv[2];
+const requestedTarget = requestedTargetArgument === undefined ? undefined : path.resolve(requestedTargetArgument);
 const executable = process.platform === "win32"
   ? (requestedTarget ?? path.join(appRoot, "release", "win-unpacked", "JiMu.exe"))
   : path.join(requestedTarget ?? path.join(appRoot, "release", "mac-arm64", "JiMu.app"), "Contents", "MacOS", "JiMu");
