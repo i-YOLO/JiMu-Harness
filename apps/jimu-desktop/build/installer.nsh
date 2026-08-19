@@ -1,3 +1,3 @@
-!macro customInit
-  StrCpy $INSTDIR "$LocalAppData\Programs\JiMu"
+!macro customInstallMode
+  StrCpy $isForceCurrentInstall "1"
 !macroend

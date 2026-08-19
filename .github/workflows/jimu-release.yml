@@ -130,7 +130,8 @@ jobs:
             -Installer "apps/jimu-desktop/release/JiMu-$env:VERSION-Windows-x64-Setup.exe" `
             -Version $env:VERSION `
             -ExpectedSignature Valid `
-            -PublisherName $env:AZURE_PUBLISHER_NAME
+            -PublisherName $env:AZURE_PUBLISHER_NAME `
+            -InstallRoot "$env:LOCALAPPDATA\JiMu Installer Test\JiMu"
       - name: Generate checksum
         run: |
           $installer = "apps/jimu-desktop/release/JiMu-$env:VERSION-Windows-x64-Setup.exe"

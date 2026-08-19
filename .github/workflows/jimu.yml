@@ -149,7 +149,8 @@ jobs:
             -BaselineInstaller "apps/jimu-desktop/release/baseline/JiMu-0.1.99-Windows-x64-Setup.exe" `
             -Installer "apps/jimu-desktop/release/JiMu-$version-Windows-x64-Setup.exe" `
             -Version $version `
-            -ExpectedSignature NotSigned
+            -ExpectedSignature NotSigned `
+            -InstallRoot "$env:LOCALAPPDATA\JiMu Installer Test\JiMu"
       - name: Generate checksum
         run: |
           $version = (Get-Content apps/jimu-desktop/package.json | ConvertFrom-Json).version

@@ -44,6 +44,7 @@ describe('JiMu GitHub workflows', () => {
     expect(windows).toContain('packages/shell/pwsh-sandbox/tests/acl.e2e.ts')
     expect(windows).toContain('scripts/build-windows.mjs --version 0.1.99')
     expect(windows).toContain('test-windows-installer.ps1')
+    expect(windows).toContain('-InstallRoot')
     expect(windows).toContain('ExpectedSignature NotSigned')
     expect(windows).toContain('--platform win32 --arch x64')
   })
@@ -90,6 +91,7 @@ describe('JiMu GitHub workflows', () => {
     expect(windowsSteps).toContain('dist:win:signed')
     expect(windowsSteps).toContain('scripts/build-windows.mjs --version 0.1.99')
     expect(windowsSteps).toContain('ExpectedSignature Valid')
+    expect(windowsSteps).toContain('-InstallRoot')
 
     expect(publish.needs).toEqual(['macos', 'windows'])
     expect(record(publish.env, 'publish environment').GH_TOKEN).toBeUndefined()
@@ -111,6 +113,12 @@ describe('JiMu GitHub workflows', () => {
     expect(scripts['dist:win']).toContain('build-windows.mjs')
     expect(scripts['dist:win:signed']).toContain('--signed')
     expect(record(build.win, 'Windows build configuration').icon).toBe('build/JiMu.ico')
+    const nsis = record(build.nsis, 'Windows NSIS configuration')
+    expect(nsis.oneClick).toBe(false)
+    expect(nsis.perMachine).toBe(false)
+    expect(nsis.allowElevation).toBe(false)
+    expect(nsis.allowToChangeInstallationDirectory).toBe(true)
+    expect(nsis.include).toBe('build/installer.nsh')
   })
 
   it('pins every remote action used by active JiMu workflows', () => {

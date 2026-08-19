@@ -250,6 +250,7 @@ const IPC_HANDLER_CHANNELS = [
   'jimu:onboarding:snapshot',
   'jimu:onboarding:set-modules',
   'jimu:onboarding:install-default',
+  'jimu:onboarding:choose-knowledge-target',
   'jimu:onboarding:preview-existing',
   'jimu:onboarding:apply-existing',
   'jimu:onboarding:test-deepseek',
@@ -512,6 +513,7 @@ let harnessRestarting = false
 let pluginOperationPending = false
 let desktopSettingsRevision = 0
 let onboardingOperation: JimuOnboardingSnapshot['knowledge'] | null = null
+let onboardingKnowledgeTarget: string | null = null
 let onboardingCredentialError: string | undefined
 let onboardingTesting = false
 let onboardingNotificationGeneration = 0
@@ -890,6 +892,17 @@ async function onboardingSnapshot(): Promise<JimuOnboardingSnapshot> {
   const completed = settings.onboardingVersion === 1
   const selection = selectedKnowledgeModules(settings)
   const root = knowledgeSetup.root
+  const selectedTarget = onboardingKnowledgeTarget
+  const projectedKnowledge: JimuOnboardingSnapshot['knowledge'] = selectedTarget !== null && selectedTarget !== root
+    ? { phase: 'unconfigured', root: selectedTarget }
+    : {
+      phase: knowledgeSetup.phase,
+      ...(root
+        ? { root }
+        : settings.knowledgeModules ? { root: defaultKnowledgeTarget() } : {}),
+      ...(settings.knowledgeSource ? { source: settings.knowledgeSource } : {}),
+      ...(knowledgeSetup.error ? { error: knowledgeSetup.error } : {}),
+    }
   const installed = async (id: KnowledgeModuleId): Promise<boolean> => (
     root !== undefined && await pathExists(join(root, KNOWLEDGE_MODULE_DIRECTORIES[id]))
   )
@@ -902,7 +915,7 @@ async function onboardingSnapshot(): Promise<JimuOnboardingSnapshot> {
   if (completed) phase = 'complete'
   else if (onboardingTesting) phase = 'testing'
   else if (settings.knowledgeModules === undefined) phase = 'features'
-  else if (knowledgeSetup.phase !== 'ready') phase = 'knowledge'
+  else if (projectedKnowledge.phase !== 'ready') phase = 'knowledge'
   else phase = 'credential'
   return {
     revision: String(desktopSettingsRevision),
@@ -912,14 +925,7 @@ async function onboardingSnapshot(): Promise<JimuOnboardingSnapshot> {
       benchmarks: { enabled: selection.benchmarks, installed: benchmarksInstalled },
       factory: { enabled: selection.factory, installed: factoryInstalled },
     },
-    knowledge: onboardingOperation ?? {
-      phase: knowledgeSetup.phase,
-      ...(knowledgeSetup.root
-        ? { root: knowledgeSetup.root }
-        : settings.knowledgeModules ? { root: defaultKnowledgeTarget() } : {}),
-      ...(settings.knowledgeSource ? { source: settings.knowledgeSource } : {}),
-      ...(knowledgeSetup.error ? { error: knowledgeSetup.error } : {}),
-    },
+    knowledge: onboardingOperation ?? projectedKnowledge,
     credential,
   }
 }
@@ -945,18 +951,54 @@ async function setOnboardingModules(request: unknown): Promise<JimuOnboardingSna
   return await onboardingSnapshot()
 }
 
+async function chooseOnboardingKnowledgeTarget(request: unknown): Promise<unknown> {
+  const payload = asRecord(request)
+  assertSettingsRevision(payload.revision)
+  const owner = mainWindow
+  if (owner === null) throw new Error('JiMu window is unavailable')
+  const result = await dialog.showOpenDialog(owner, {
+    title: '选择 JiMu-Knowledge 的上级目录',
+    buttonLabel: '在此位置初始化',
+    properties: ['openDirectory', 'createDirectory'],
+  })
+  if (result.canceled || result.filePaths[0] === undefined) return { canceled: true }
+  const parent = await realpath(result.filePaths[0])
+  const target = join(parent, 'JiMu-Knowledge')
+  if (await pathExists(target)) {
+    const settings = await readSettings()
+    const module = await loadKnowledgeModule()
+    const inspection = await module.inspectKnowledgeRoot(target, {
+      requiredModules: requiredKnowledgeModules(selectedKnowledgeModules(settings)),
+    })
+    if (inspection.phase !== 'ready') {
+      return {
+        canceled: false,
+        accepted: false,
+        target,
+        error: inspection.error ?? '所选位置中的 JiMu-Knowledge 已存在但不兼容',
+      }
+    }
+  }
+  onboardingKnowledgeTarget = target
+  onboardingOperation = null
+  pendingExistingKnowledge = null
+  notifyOnboarding()
+  return { canceled: false, accepted: true, target, snapshot: await onboardingSnapshot() }
+}
+
 async function installDefaultKnowledge(request: unknown): Promise<JimuOnboardingSnapshot> {
   const payload = asRecord(request)
   assertSettingsRevision(payload.revision)
   const settings = await readSettings()
   if (!settings.knowledgeModules) throw new Error('请先选择需要的知识库能力')
   const selection = settings.knowledgeModules
-  const target = defaultKnowledgeTarget()
+  const target = onboardingKnowledgeTarget ?? defaultKnowledgeTarget()
   const module = await loadKnowledgeModule()
   if (await pathExists(target)) {
     const existing = await module.inspectKnowledgeRoot(target, { requiredModules: requiredKnowledgeModules(selection) })
-    if (existing.phase !== 'ready') throw new Error('默认目录已存在，但不是兼容的 JiMu 知识库；请改用“选择已有知识库”')
+    if (existing.phase !== 'ready') throw new Error('目标目录已存在，但不是兼容的 JiMu 知识库；请改用“连接已有知识库”')
     await activateKnowledgeRoot(existing, selection, 'existing')
+    onboardingKnowledgeTarget = null
     notifyOnboarding()
     return await onboardingSnapshot()
   }
@@ -984,6 +1026,7 @@ async function installDefaultKnowledge(request: unknown): Promise<JimuOnboarding
     const inspection = await module.inspectKnowledgeRoot(target, { requiredModules: requiredKnowledgeModules(selection) })
     if (inspection.phase !== 'ready') throw new Error(inspection.error ?? '安装后的知识库校验失败')
     await activateKnowledgeRoot(inspection, selection, installed.source)
+    onboardingKnowledgeTarget = null
     onboardingOperation = null
     notifyOnboarding()
     return await onboardingSnapshot()
@@ -1456,6 +1499,10 @@ function registerIpcHandlers(): void {
   ipcMain.handle('jimu:onboarding:install-default', async (event, request: unknown) => {
     assertTrustedEvent(event)
     return await installDefaultKnowledge(request)
+  })
+  ipcMain.handle('jimu:onboarding:choose-knowledge-target', async (event, request: unknown) => {
+    assertTrustedEvent(event)
+    return await chooseOnboardingKnowledgeTarget(request)
   })
   ipcMain.handle('jimu:onboarding:preview-existing', async (event, request: unknown) => {
     assertTrustedEvent(event)

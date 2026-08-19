@@ -8,11 +8,11 @@ JiMu Harness 是基于官方 [DeepSeek Harness](https://github.com/deepseek-ai/d
 
 ## 隐私边界
 
-仓库不包含任何用户知识、项目、会话、凭据、统计、截图或演示记录。首次启动会依次选择按需模块、安装本地知识库并验证 DeepSeek API Key；JiMu 不扫描用户主目录。
+仓库不包含任何用户知识、项目、会话、凭据、统计、截图或演示记录。首次启动会依次选择按需模块、选择或使用默认的知识库初始化位置、安装本地知识库并验证 DeepSeek API Key；JiMu 不扫描用户主目录。
 
 空白配套模板位于 [i-YOLO/JiMu-Knowledge](https://github.com/i-YOLO/JiMu-Knowledge)。Git 同步交给用户现有的 Git 工具，应用不保存仓库凭据。
 
-默认配置从锁定的 GitHub Release 安装完整 JiMu-Knowledge，断网时自动使用安装包内置的同版本副本。`07-对标博主库` 与 `08-自媒体工厂` 可以在首次配置或设置页分别关闭；关闭不会创建、扫描或删除对应目录。
+默认配置从锁定的 GitHub Release 安装完整 JiMu-Knowledge，断网时自动使用安装包内置的同版本副本。用户也可以通过原生目录窗口选择上级目录，JiMu 会在其中原子创建 `JiMu-Knowledge`。`07-对标博主库` 与 `08-自媒体工厂` 可以在首次配置或设置页分别关闭；关闭不会创建、扫描或删除对应目录。
 
 ## 代码结构
 

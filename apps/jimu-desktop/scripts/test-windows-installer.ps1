@@ -3,14 +3,16 @@ param(
   [Parameter(Mandatory = $true)] [string] $Installer,
   [Parameter(Mandatory = $true)] [string] $Version,
   [ValidateSet("NotSigned", "Valid")] [string] $ExpectedSignature = "NotSigned",
-  [string] $PublisherName = ""
+  [string] $PublisherName = "",
+  [string] $InstallRoot = ""
 )
 
 $ErrorActionPreference = "Stop"
 if ($env:CI -ne "true") { throw "The installer lifecycle test may run only on an ephemeral CI runner." }
 if (-not $env:LOCALAPPDATA) { throw "LOCALAPPDATA is required." }
 
-$installRoot = Join-Path $env:LOCALAPPDATA "Programs\JiMu"
+$defaultInstallRoot = Join-Path $env:LOCALAPPDATA "Programs\JiMu"
+$installRoot = if ($InstallRoot.Trim()) { [IO.Path]::GetFullPath($InstallRoot) } else { $defaultInstallRoot }
 $executable = Join-Path $installRoot "JiMu.exe"
 $uninstaller = Join-Path $installRoot "Uninstall JiMu.exe"
 $userData = Join-Path $env:LOCALAPPDATA "JiMu"
@@ -28,9 +30,11 @@ function Wait-ForPath([string] $Path, [bool] $Present) {
   throw "Timed out waiting for path state $Present`: $Path"
 }
 
-function Install-JiMu([string] $Path) {
+function Install-JiMu([string] $Path, [string] $Target = "") {
   if (-not (Test-Path -LiteralPath $Path)) { throw "Installer is missing: $Path" }
-  $process = Start-Process -FilePath $Path -ArgumentList "/S" -PassThru -Wait
+  $arguments = @("/S")
+  if ($Target) { $arguments += "/D=$Target" }
+  $process = Start-Process -FilePath $Path -ArgumentList $arguments -PassThru -Wait
   if ($process.ExitCode -ne 0) { throw "Installer exited with $($process.ExitCode): $Path" }
   Wait-ForPath $executable $true
 }
@@ -51,7 +55,7 @@ function Assert-Signature([string] $Path) {
 
 if (Test-Path -LiteralPath $installRoot) { throw "Installer test requires a clean runner: $installRoot already exists." }
 
-Install-JiMu (Resolve-Path -LiteralPath $BaselineInstaller)
+Install-JiMu (Resolve-Path -LiteralPath $BaselineInstaller) $installRoot
 New-Item -ItemType Directory -Force -Path $userData, $knowledgeRoot | Out-Null
 Set-Content -LiteralPath $userDataSentinel -Value "preserve-user-data" -Encoding Ascii
 Set-Content -LiteralPath $knowledgeSentinel -Value "preserve-knowledge" -Encoding Ascii

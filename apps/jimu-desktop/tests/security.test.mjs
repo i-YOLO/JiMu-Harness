@@ -20,13 +20,14 @@ const repoRoot = path.resolve(desktopRoot, "../..");
 const run = promisify(execFile);
 
 test("desktop shell keeps the approved cross-platform Electron security posture", async () => {
-  const [html, main, preload, factoryService, manifest, installer, packagedSmoke, overlay, policy, pluginManager, styles] = await Promise.all([
+  const [html, main, preload, factoryService, manifest, installer, installerLifecycle, packagedSmoke, overlay, policy, pluginManager, styles] = await Promise.all([
     readFile(path.join(desktopRoot, "index.html"), "utf8"),
     readFile(path.join(desktopRoot, "src/main/index.ts"), "utf8"),
     readFile(path.join(desktopRoot, "src/preload/index.ts"), "utf8"),
     readFile(path.join(repoRoot, "apps/jimu-ui-preview/scripts/factory-service.mjs"), "utf8"),
     readFile(path.join(desktopRoot, "package.json"), "utf8").then(JSON.parse),
     readFile(path.join(desktopRoot, "build/installer.nsh"), "utf8"),
+    readFile(path.join(desktopRoot, "scripts/test-windows-installer.ps1"), "utf8"),
     readFile(path.join(desktopRoot, "scripts/smoke-packaged.mjs"), "utf8"),
     readFile(path.join(desktopRoot, "config/desktop.cordis.yml"), "utf8"),
     readFile(path.join(desktopRoot, "config/plugin-policy.json"), "utf8"),
@@ -49,6 +50,7 @@ test("desktop shell keeps the approved cross-platform Electron security posture"
   assert.match(preload, /factory:\s*\{/);
   assert.match(preload, /plugins:\s*\{/);
   assert.match(preload, /onboarding:\s*\{/);
+  assert.match(preload, /chooseKnowledgeTarget:/);
   assert.match(preload, /jimu:onboarding:test-deepseek/);
   assert.match(preload, /jimu:plugins:apply-toggles/);
   assert.match(preload, /process\.platform === 'win32' \? 'Windows' : 'macOS'/);
@@ -68,6 +70,8 @@ test("desktop shell keeps the approved cross-platform Electron security posture"
   assert.match(main, /accelerator: 'CmdOrCtrl\+,'/);
   assert.match(main, /accelerator: 'CmdOrCtrl\+K'/);
   assert.match(main, /process\.env\.LOCALAPPDATA/);
+  assert.match(main, /jimu:onboarding:choose-knowledge-target/);
+  assert.match(main, /join\(parent, 'JiMu-Knowledge'\)/);
   assert.match(main, /icon: applicationIconPath\(\)/);
   assert.match(main, /app\.dock\?\.setIcon\(applicationIconPath\(\)\)/);
   assert.match(main, /if \(!windowCreationReady\) return/);
@@ -98,14 +102,17 @@ test("desktop shell keeps the approved cross-platform Electron security posture"
   assert.deepEqual(manifest.build.win.target[0].arch, ["x64"]);
   assert.equal(manifest.build.win.target[0].target, "nsis");
   assert.equal(manifest.build.win.icon, "build/JiMu.ico");
-  assert.equal(manifest.build.nsis.oneClick, true);
+  assert.equal(manifest.build.nsis.oneClick, false);
   assert.equal(manifest.build.nsis.perMachine, false);
   assert.equal(manifest.build.nsis.allowElevation, false);
+  assert.equal(manifest.build.nsis.allowToChangeInstallationDirectory, true);
   assert.equal(manifest.build.nsis.include, "build/installer.nsh");
   assert.equal(manifest.build.nsis.deleteAppDataOnUninstall, false);
-  assert.match(installer, /!macro customInit/);
-  assert.match(installer, /StrCpy \$INSTDIR "\$LocalAppData\\Programs\\JiMu"/);
+  assert.match(installer, /!macro customInstallMode/);
+  assert.match(installer, /StrCpy \$isForceCurrentInstall "1"/);
   assert.doesNotMatch(installer, /\$PROGRAMFILES/i);
+  assert.match(installerLifecycle, /"\/D=\$Target"/);
+  assert.match(installerLifecycle, /Install-JiMu \(Resolve-Path -LiteralPath \$BaselineInstaller\) \$installRoot/);
   assert.match(packagedSmoke, /process\.argv\[2\] === "--" \? process\.argv\[3\] : process\.argv\[2\]/);
   assert.equal(manifest.build.asar, false);
   assert.ok(manifest.build.files.includes("config/**/*"));

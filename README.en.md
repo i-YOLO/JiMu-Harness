@@ -8,11 +8,11 @@ This repository preserves the complete upstream Git history and tags. DeepSeek H
 
 ## Privacy boundary
 
-The repository contains no user knowledge, projects, sessions, credentials, analytics, screenshots, or demo records. First launch selects optional modules, installs a local knowledge base, and verifies a DeepSeek API key. JiMu does not scan the home directory.
+The repository contains no user knowledge, projects, sessions, credentials, analytics, screenshots, or demo records. First launch selects optional modules, chooses or accepts the default Knowledge initialization location, installs the local knowledge base, and verifies a DeepSeek API key. JiMu does not scan the home directory.
 
 The empty companion template lives in [i-YOLO/JiMu-Knowledge](https://github.com/i-YOLO/JiMu-Knowledge). Git synchronization is intentionally delegated to the user's normal Git tooling; the app does not store repository credentials.
 
-The default path installs the complete JiMu-Knowledge from a locked GitHub Release and automatically uses the same-version installer copy when offline. `07-对标博主库` and `08-自媒体工厂` may be disabled independently during first-run setup or later in Settings; disabling a module neither creates, scans, nor deletes its directory.
+The default path installs the complete JiMu-Knowledge from a locked GitHub Release and automatically uses the same-version installer copy when offline. A native folder dialog can instead select a parent directory, where JiMu atomically creates `JiMu-Knowledge`. `07-对标博主库` and `08-自媒体工厂` may be disabled independently during first-run setup or later in Settings; disabling a module neither creates, scans, nor deletes its directory.
 
 ## Architecture
 

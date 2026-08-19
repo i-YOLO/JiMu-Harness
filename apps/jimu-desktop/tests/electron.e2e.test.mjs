@@ -49,6 +49,8 @@ test("first launch keeps Harness available and gates the workspace behind native
   assert.equal(await page.locator(".app-sidebar").count(), 0);
   await page.getByRole("button", { name: /使用完整默认配置/ }).click();
   await page.getByRole("heading", { name: "安装你的本地知识库" }).waitFor();
+  await page.getByRole("button", { name: /选择初始化位置/ }).waitFor();
+  await page.getByRole("button", { name: /连接已有知识库/ }).waitFor();
   await page.getByRole("button", { name: "返回上一步" }).click();
   await page.getByRole("heading", { name: "你需要哪些 JiMu 能力？" }).waitFor();
   assert.equal(await page.getByRole("button", { name: "返回上一步" }).count(), 0);

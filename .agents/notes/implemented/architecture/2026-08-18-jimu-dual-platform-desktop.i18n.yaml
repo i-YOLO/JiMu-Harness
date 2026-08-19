@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-18-jimu-dual-platform-desktop.md
-2026-08-18-jimu-dual-platform-desktop.md: 18543bd511b373b2679b8772955892aaa09ece40
-2026-08-18-jimu-dual-platform-desktop.zh.md: 8157c903031224b62a9090f400e7abf432c3504e
+2026-08-18-jimu-dual-platform-desktop.md: 581debdea54bc0d5514e3f19f890ed0cdbbff96f
+2026-08-18-jimu-dual-platform-desktop.zh.md: 87d436044931c4d1df44d60f51f58dacd09a209c

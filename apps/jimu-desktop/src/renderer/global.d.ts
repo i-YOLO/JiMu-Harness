@@ -8,6 +8,7 @@ declare global {
         snapshot(): Promise<unknown>
         setModules(request: unknown): Promise<unknown>
         installDefault(request: unknown): Promise<unknown>
+        chooseKnowledgeTarget(request: unknown): Promise<unknown>
         previewExisting(request: unknown): Promise<unknown>
         applyExisting(request: unknown): Promise<unknown>
         testAndSaveDeepSeek(request: unknown): Promise<unknown>

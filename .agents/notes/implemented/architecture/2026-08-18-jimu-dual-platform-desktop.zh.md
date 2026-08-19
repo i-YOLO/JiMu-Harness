@@ -12,7 +12,7 @@ JiMu 的 Electron 宿主与发行工作流假设系统为 macOS，尽管内嵌 H
 
 JiMu 使用同一份桌面源码发行 macOS Apple Silicon 与 Windows x64。Preload 将 `macOS | Windows` 作为展示信息公开；Electron 主进程负责相应的标题栏、菜单、快捷键和用户数据默认位置，同时不移动现有 macOS 数据。Renderer 只用该信息处理操作系统展示差异。
 
-Windows 发行物是安装到 `%LOCALAPPDATA%\Programs\JiMu` 的当前用户一键 NSIS 安装包。一个最小 NSIS 初始化钩子固定该目录，因为 Electron Builder 的当前用户一键模式默认会根据带作用域的 npm 包名而不是产品名生成目录。应用数据和 Knowledge 位于安装目录外，并在升级和卸载后保留。打包后的 Harness 在 Windows 选择现有受约束的 PowerShell 栈，在 macOS 选择 Bash 栈。
+Windows 发行物是默认安装到 `%LOCALAPPDATA%\Programs\JiMu`、提供原生目录选择页的当前用户 NSIS 安装包。一个最小 NSIS 安装模式钩子会强制当前用户路径并跳过全用户选项，因此改选其他目录也不会申请管理员权限。应用数据和 Knowledge 位于安装目录外，并在升级和卸载后保留。首次 Knowledge 配置同样提供原生上级目录选择器，并在投影出的目标位置原子创建 `JiMu-Knowledge`。打包后的 Harness 在 Windows 选择现有受约束的 PowerShell 栈，在 macOS 选择 Bash 栈。
 
 原生构建保留在目标操作系统。Pull Request 在标准 Windows x64 runner 上构建未签名安装包并执行安装生命周期。正式发行通过受保护的 Azure Trusted Signing 环境签署 Windows 可执行文件和安装包，独立构建 macOS DMG，并且只在同一 commit 的全部任务成功后发布两端产物。
 

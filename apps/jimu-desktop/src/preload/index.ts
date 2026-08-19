@@ -11,6 +11,7 @@ const bridge = {
     snapshot: () => ipcRenderer.invoke('jimu:onboarding:snapshot'),
     setModules: (request: unknown) => ipcRenderer.invoke('jimu:onboarding:set-modules', request),
     installDefault: (request: unknown) => ipcRenderer.invoke('jimu:onboarding:install-default', request),
+    chooseKnowledgeTarget: (request: unknown) => ipcRenderer.invoke('jimu:onboarding:choose-knowledge-target', request),
     previewExisting: (request: unknown) => ipcRenderer.invoke('jimu:onboarding:preview-existing', request),
     applyExisting: (request: unknown) => ipcRenderer.invoke('jimu:onboarding:apply-existing', request),
     testAndSaveDeepSeek: (request: unknown) => ipcRenderer.invoke('jimu:onboarding:test-deepseek', request),
