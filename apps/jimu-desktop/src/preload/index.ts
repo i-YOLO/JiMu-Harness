@@ -1,13 +1,17 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
 type ChangeListener = (payload: unknown) => void
+type JimuPlatform = 'macOS' | 'Windows'
+
+const platform: JimuPlatform = process.platform === 'win32' ? 'Windows' : 'macOS'
 
 const bridge = {
-  platform: 'macOS' as const,
+  platform,
   onboarding: {
     snapshot: () => ipcRenderer.invoke('jimu:onboarding:snapshot'),
     setModules: (request: unknown) => ipcRenderer.invoke('jimu:onboarding:set-modules', request),
     installDefault: (request: unknown) => ipcRenderer.invoke('jimu:onboarding:install-default', request),
+    chooseKnowledgeTarget: (request: unknown) => ipcRenderer.invoke('jimu:onboarding:choose-knowledge-target', request),
     previewExisting: (request: unknown) => ipcRenderer.invoke('jimu:onboarding:preview-existing', request),
     applyExisting: (request: unknown) => ipcRenderer.invoke('jimu:onboarding:apply-existing', request),
     testAndSaveDeepSeek: (request: unknown) => ipcRenderer.invoke('jimu:onboarding:test-deepseek', request),
@@ -91,10 +95,23 @@ const bridge = {
     snapshot: () => ipcRenderer.invoke('jimu:plugins:snapshot'),
     applyToggles: (request: unknown) => ipcRenderer.invoke('jimu:plugins:apply-toggles', request),
     restart: () => ipcRenderer.invoke('jimu:plugins:restart'),
+    forceRestart: () => ipcRenderer.invoke('jimu:plugins:force-restart'),
+    searchCatalog: (request: unknown) => ipcRenderer.invoke('jimu:plugins:search-catalog', request),
+    inspect: (request: unknown) => ipcRenderer.invoke('jimu:plugins:inspect', request),
+    install: (request: unknown) => ipcRenderer.invoke('jimu:plugins:install', request),
+    cancelOperation: (request: unknown) => ipcRenderer.invoke('jimu:plugins:cancel-operation', request),
+    setEnabled: (request: unknown) => ipcRenderer.invoke('jimu:plugins:set-enabled', request),
+    update: (request: unknown) => ipcRenderer.invoke('jimu:plugins:update', request),
+    uninstall: (request: unknown) => ipcRenderer.invoke('jimu:plugins:uninstall', request),
     subscribe(listener: ChangeListener) {
       const wrapped = (_event: Electron.IpcRendererEvent, payload: unknown) => { listener(payload) }
       ipcRenderer.on('jimu:plugins:changed', wrapped)
       return () => ipcRenderer.removeListener('jimu:plugins:changed', wrapped)
+    },
+    subscribeOperation(listener: ChangeListener) {
+      const wrapped = (_event: Electron.IpcRendererEvent, payload: unknown) => { listener(payload) }
+      ipcRenderer.on('jimu:plugins:operation', wrapped)
+      return () => ipcRenderer.removeListener('jimu:plugins:operation', wrapped)
     },
   },
   project: {

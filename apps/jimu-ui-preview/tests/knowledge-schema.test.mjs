@@ -148,6 +148,9 @@ test("production renderer sources contain no static user-data fallbacks", async 
   assert.match(onboarding, /使用完整默认配置/);
   assert.match(onboarding, /返回上一步/);
   assert.match(onboarding, /点击下方能力卡片即可选择/);
+  assert.match(onboarding, /选择初始化位置/);
+  assert.match(onboarding, /初始化并安装知识库/);
+  assert.match(onboarding, /连接已有知识库/);
   assert.match(onboarding, /测试并进入 JiMu/);
   assert.doesNotMatch(onboarding, /暂时跳过|跳过配置/);
 });

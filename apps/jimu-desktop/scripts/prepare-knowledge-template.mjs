@@ -12,6 +12,9 @@ import {
 const appRoot = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const lock = JSON.parse(await readFile(path.join(appRoot, "config", "knowledge-template-lock.json"), "utf8"));
 const outputRoot = path.join(appRoot, "build-cache", "jimu-knowledge-template");
+const argumentsSet = new Set(process.argv.slice(2));
+for (const argument of argumentsSet) if (argument !== "--release") throw new Error(`Unknown argument: ${argument}`);
+const releaseMode = argumentsSet.has("--release");
 
 function sha256(buffer) {
   return createHash("sha256").update(buffer).digest("hex");
@@ -81,7 +84,6 @@ async function validateExtractedTemplate(root) {
 
 async function loadArchive() {
   const localRoot = process.env.JIMU_KNOWLEDGE_TEMPLATE_DIR;
-  const releaseMode = process.env.JIMU_KNOWLEDGE_RELEASE_MODE === "1";
   if (localRoot && !releaseMode) {
     return await readFile(path.join(path.resolve(localRoot), "dist", `jimu-knowledge-${lock.templateVersion}.zip`));
   }

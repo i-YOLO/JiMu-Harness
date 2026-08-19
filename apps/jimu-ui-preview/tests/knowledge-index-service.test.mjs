@@ -14,7 +14,7 @@ async function fingerprint(files) {
   }));
 }
 
-test("indexes, searches, resolves, graphs and incrementally refreshes a read-only macOS knowledge root", async (t) => {
+test("indexes, searches, resolves, graphs and incrementally refreshes a read-only knowledge root", async (t) => {
   const fixture = await mkdtemp(path.join(os.tmpdir(), "jimu-index-test-"));
   const root = path.join(fixture, "knowledge-root");
   const support = path.join(fixture, "Library", "Application Support", "JiMu", "knowledge");
@@ -218,6 +218,19 @@ test("indexes, searches, resolves, graphs and incrementally refreshes a read-onl
   assert.equal((await service.resolveLink({ fromPath: inspiration.sourcePath, href: "javascript:alert(1)" })).kind, "blocked");
   assert.equal((await service.resolveLink({ fromPath: inspiration.sourcePath, href: "../../../outside.md" })).kind, "blocked");
   assert.equal((await service.resolveLink({ fromPath: inspiration.sourcePath, href: path.join(fixture, "absolute-outside.png") })).reason, "absolute-path-outside-root");
+  for (const href of [
+    String.raw`C:\outside.png`,
+    "C:/outside.png",
+    String.raw`C:outside.png`,
+    String.raw`\\server\share\outside.png`,
+    String.raw`\\?\C:\outside.png`,
+    String.raw`\\.\pipe\outside`,
+  ]) {
+    assert.deepEqual(
+      await service.resolveLink({ fromPath: inspiration.sourcePath, href }),
+      { kind: "blocked", href, reason: "absolute-path-outside-root" },
+    );
+  }
   assert.equal((await service.resolveLink({ fromPath: inspiration.sourcePath, href: "/03-Knowledge/01-长期卡.md" })).kind, "document");
   assert.equal((await service.resolveLink({ fromPath: inspiration.sourcePath, href: "../missing.md" })).kind, "missing");
   assert.equal((await service.resolveLink({ fromPath: inspiration.sourcePath, href: "../03-Knowledge/01-长期卡.md#不存在" })).reason, "anchor-not-found");

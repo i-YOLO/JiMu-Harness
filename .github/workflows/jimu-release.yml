@@ -6,30 +6,51 @@ on:
       version:
         description: JiMu Desktop version without the v prefix
         required: true
-        default: 0.1.1
+        default: 0.2.0
         type: string
 
 permissions:
   contents: read
 
 jobs:
-  gates:
-    name: Revalidate JiMu gates
-    uses: ./.github/workflows/jimu.yml
-
-  release:
-    name: macOS Apple Silicon
-    needs: gates
-    if: github.ref == 'refs/heads/main'
-    runs-on: macos-14
-    permissions:
-      contents: write
+  verify-source:
+    name: Verify release source
+    runs-on: ubuntu-24.04
     env:
       VERSION: ${{ inputs.version }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 0
+      - name: Verify commit, version, and tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = 'refs/heads/main'
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          git fetch origin main --tags
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+          package_version=$(node -p "require('./apps/jimu-desktop/package.json').version")
+          test "$package_version" = "$VERSION"
+          if git show-ref --verify --quiet "refs/tags/v$VERSION" || gh release view "v$VERSION" >/dev/null 2>&1; then
+            echo "::error::Tag or release v$VERSION already exists."
+            exit 1
+          fi
+
+  gates:
+    name: Revalidate JiMu gates
+    needs: verify-source
+    uses: ./.github/workflows/jimu.yml
+
+  macos:
+    name: Build macOS Apple Silicon
+    needs: [verify-source, gates]
+    runs-on: macos-14
+    env:
+      VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
         with:
           version: 11.7.0
@@ -37,19 +58,6 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-      - name: Verify release source
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          git fetch origin main --depth=1
-          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
-          package_version=$(node -p "require('./apps/jimu-desktop/package.json').version")
-          test "$package_version" = "$VERSION"
-          if gh release view "v$VERSION" >/dev/null 2>&1; then
-            echo "::error::Release v$VERSION already exists."
-            exit 1
-          fi
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Build shared libraries
@@ -59,7 +67,7 @@ jobs:
       - name: Smoke-test packaged application
         run: pnpm --filter @i-yolo/jimu-desktop test:packaged
       - name: Audit unpacked application
-        run: node scripts/jimu-release-audit.mjs --root apps/jimu-desktop/release/mac-arm64/JiMu.app/Contents/Resources
+        run: node scripts/jimu-release-audit.mjs --root apps/jimu-desktop/release/mac-arm64/JiMu.app/Contents/Resources --platform darwin --arch arm64
       - name: Audit mounted DMG
         run: |
           set -euo pipefail
@@ -68,19 +76,108 @@ jobs:
           mkdir -p "$mount"
           hdiutil attach -nobrowse -readonly -mountpoint "$mount" "$dmg"
           trap 'hdiutil detach "$mount"' EXIT
-          node scripts/jimu-release-audit.mjs --root "$mount/JiMu.app/Contents/Resources"
+          node scripts/jimu-release-audit.mjs --root "$mount/JiMu.app/Contents/Resources" --platform darwin --arch arm64
       - name: Generate checksum
         run: |
           cd apps/jimu-desktop/release
           shasum -a 256 "JiMu-$VERSION-macOS-arm64.dmg" > "JiMu-$VERSION-macOS-arm64.dmg.sha256"
-      - name: Publish GitHub Release
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: jimu-release-macos-arm64
+          path: |
+            apps/jimu-desktop/release/JiMu-*-macOS-arm64.dmg
+            apps/jimu-desktop/release/JiMu-*-macOS-arm64.dmg.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+  windows:
+    name: Build signed Windows x64
+    needs: [verify-source, gates]
+    runs-on: windows-2025
+    environment: jimu-release
+    env:
+      VERSION: ${{ inputs.version }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      AZURE_CODE_SIGNING_ENDPOINT: ${{ vars.AZURE_CODE_SIGNING_ENDPOINT }}
+      AZURE_CODE_SIGNING_ACCOUNT_NAME: ${{ vars.AZURE_CODE_SIGNING_ACCOUNT_NAME }}
+      AZURE_CERTIFICATE_PROFILE_NAME: ${{ vars.AZURE_CERTIFICATE_PROFILE_NAME }}
+      AZURE_PUBLISHER_NAME: ${{ vars.AZURE_PUBLISHER_NAME }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
+        with:
+          version: 11.7.0
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build shared libraries
+        run: pnpm run build:lib
+      - name: Build signed Windows installer
+        run: pnpm --filter @i-yolo/jimu-desktop dist:win:signed
+      - name: Build synthetic unsigned baseline installer
+        run: pnpm --filter @i-yolo/jimu-desktop exec node scripts/build-windows.mjs --version 0.1.99 --output release/baseline
+      - name: Audit unpacked Windows application
+        run: node scripts/jimu-release-audit.mjs --root apps/jimu-desktop/release/win-unpacked/resources --platform win32 --arch x64
+      - name: Verify signed install, upgrade, ConPTY, and uninstall lifecycle
+        run: |
+          & apps/jimu-desktop/scripts/test-windows-installer.ps1 `
+            -BaselineInstaller "apps/jimu-desktop/release/baseline/JiMu-0.1.99-Windows-x64-Setup.exe" `
+            -Installer "apps/jimu-desktop/release/JiMu-$env:VERSION-Windows-x64-Setup.exe" `
+            -Version $env:VERSION `
+            -ExpectedSignature Valid `
+            -PublisherName $env:AZURE_PUBLISHER_NAME `
+            -InstallRoot "$env:LOCALAPPDATA\JiMu Installer Test\JiMu"
+      - name: Generate checksum
+        run: |
+          $installer = "apps/jimu-desktop/release/JiMu-$env:VERSION-Windows-x64-Setup.exe"
+          $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $installer).Hash.ToLowerInvariant()
+          "$hash  $(Split-Path -Leaf $installer)" | Out-File -Encoding ascii "$installer.sha256"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: jimu-release-windows-x64
+          path: |
+            apps/jimu-desktop/release/JiMu-*-Windows-x64-Setup.exe
+            apps/jimu-desktop/release/JiMu-*-Windows-x64-Setup.exe.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish GitHub Release
+    needs: [macos, windows]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: jimu-release-macos-arm64
+          path: release-assets
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: jimu-release-windows-x64
+          path: release-assets
+      - name: Verify release asset set
+        run: |
+          set -euo pipefail
+          test -f "release-assets/JiMu-$VERSION-macOS-arm64.dmg"
+          test -f "release-assets/JiMu-$VERSION-macOS-arm64.dmg.sha256"
+          test -f "release-assets/JiMu-$VERSION-Windows-x64-Setup.exe"
+          test -f "release-assets/JiMu-$VERSION-Windows-x64-Setup.exe.sha256"
+          test "$(find release-assets -maxdepth 1 -type f | wc -l | tr -d ' ')" = 4
+      - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          release_dir="apps/jimu-desktop/release"
           gh release create "v$VERSION" \
-            "$release_dir/JiMu-$VERSION-macOS-arm64.dmg" \
-            "$release_dir/JiMu-$VERSION-macOS-arm64.dmg.sha256" \
+            release-assets/* \
+            --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
-            --title "JiMu Harness v$VERSION · macOS Apple Silicon" \
-            --notes "JiMu Harness for macOS Apple Silicon. The DMG and checksum were built from $GITHUB_SHA after the JiMu security, upstream compatibility, and desktop gates passed."
+            --title "JiMu Harness v$VERSION · macOS Apple Silicon and Windows x64" \
+            --notes "JiMu Harness for macOS Apple Silicon and Windows x64. Every asset and checksum was built from $GITHUB_SHA after the JiMu security, compatibility, native Windows, packaged-application, installer-lifecycle, and signing checks passed."

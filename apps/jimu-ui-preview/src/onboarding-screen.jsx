@@ -116,6 +116,15 @@ export function OnboardingScreen({ snapshot, onChange }) {
     void run("install", () => globalThis.window.jimu.onboarding.installDefault({ revision: snapshot.revision }));
   }
 
+  function chooseKnowledgeTarget() {
+    void run("target", async () => {
+      const result = await globalThis.window.jimu.onboarding.chooseKnowledgeTarget({ revision: snapshot.revision });
+      if (result.canceled) return null;
+      if (result.accepted === false) throw new Error(result.error ?? "所选位置无法初始化 JiMu-Knowledge。");
+      return result.snapshot;
+    });
+  }
+
   function chooseExisting() {
     void run("existing", async () => {
       const result = await globalThis.window.jimu.onboarding.previewExisting({ revision: snapshot.revision });
@@ -300,10 +309,13 @@ export function OnboardingScreen({ snapshot, onChange }) {
                 onClick={knowledgeReady ? () => setVisibleStep(null) : installDefault}
               >
                 {knowledgeReady ? <Check size={18} weight="bold" /> : <DownloadSimple size={18} weight="bold" />}
-                {knowledgeReady ? "知识库已就绪，继续连接 DeepSeek" : busy === "install" ? "正在准备…" : "一键安装默认知识库"}
+                {knowledgeReady ? "知识库已就绪，继续连接 DeepSeek" : busy === "install" ? "正在准备…" : "初始化并安装知识库"}
               </button>
               <button className="secondary-action" type="button" disabled={Boolean(busy)} onClick={chooseExisting}>
-                <FolderOpen size={18} weight="duotone" />{busy === "existing" ? "正在检查…" : "选择已有知识库"}
+                <FolderOpen size={18} weight="duotone" />{busy === "existing" ? "正在检查…" : "连接已有知识库"}
+              </button>
+              <button className="secondary-action" type="button" disabled={Boolean(busy) || knowledgeReady} onClick={chooseKnowledgeTarget}>
+                <FolderOpen size={18} weight="duotone" />{busy === "target" ? "正在选择…" : "选择初始化位置"}
               </button>
               <button className="text-action" type="button" onClick={openRepository}>查看仓库<ArrowUpRight size={14} weight="bold" /></button>
             </div>

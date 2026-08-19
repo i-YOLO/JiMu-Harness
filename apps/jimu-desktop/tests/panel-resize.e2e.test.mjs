@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { _electron as electron } from "playwright";
+import { waitForHarnessReady } from "./electron-ready.mjs";
 import { createKnowledgeFixture } from "./knowledge-fixture.mjs";
 
 const desktopRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -60,7 +61,7 @@ test("JiMu Agent panel separators resize, persist, reset and protect the convers
   const page = await electronApp.firstWindow();
   await page.waitForLoadState("domcontentloaded");
   await page.setViewportSize({ width: 1512, height: 982 });
-  await page.waitForFunction(async () => (await window.jimu.harness.status()).phase === "ready", null, { timeout: 60_000 });
+  await waitForHarnessReady(page);
   await page.getByRole("button", { name: /01 AGENT 执行现场/ }).click();
   await page.getByText("项目与会话", { exact: true }).waitFor();
 
@@ -139,9 +140,10 @@ test("JiMu Agent panel separators resize, persist, reset and protect the convers
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth) <= 1);
 
   await page.setViewportSize({ width: 1512, height: 982 });
-  await appSeparator.dblclick();
-  await projectSeparator.dblclick();
-  await contextSeparator.dblclick();
+  for (const separator of [appSeparator, projectSeparator, contextSeparator]) {
+    await separator.focus();
+    await page.keyboard.press("Home");
+  }
   assert.deepEqual(await page.evaluate(() => ({
     appSidebar: localStorage.getItem("jimu.panel.appSidebarWidth"),
     projectBrowser: localStorage.getItem("jimu.panel.projectBrowserWidth"),

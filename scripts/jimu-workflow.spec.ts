@@ -7,16 +7,17 @@ const root = resolve(import.meta.dirname, '..')
 const officialRepositoryGuard = "github.repository == 'deepseek-harness/deepseek-harness'"
 
 describe('JiMu GitHub workflows', () => {
-  it('runs three stable downstream jobs on pull requests and main pushes', () => {
+  it('runs the stable downstream jobs on pull requests and main pushes', () => {
     const workflow = loadYaml('.github/workflows/jimu.yml')
     const jobs = record(workflow.jobs, 'JiMu workflow jobs')
     const events = record(workflow.on, 'JiMu workflow events')
 
     expect(Object.keys(events).sort()).toEqual(['pull_request', 'push', 'workflow_call'])
-    expect(Object.keys(jobs).sort()).toEqual(['desktop', 'security', 'upstream-compat'])
+    expect(Object.keys(jobs).sort()).toEqual(['desktop', 'security', 'upstream-compat', 'windows-desktop'])
     expect(record(jobs.security, 'security job').name).toBe('security')
     expect(record(jobs['upstream-compat'], 'upstream compatibility job').name).toBe('upstream-compat')
     expect(record(jobs.desktop, 'desktop job').name).toBe('desktop')
+    expect(record(jobs['windows-desktop'], 'Windows desktop job').name).toBe('windows-desktop')
 
     const security = JSON.stringify(record(jobs.security, 'security job').steps)
     expect(security).toContain('node scripts/jimu-audit.mjs --base upstream/master')
@@ -34,7 +35,18 @@ describe('JiMu GitHub workflows', () => {
     expect(record(jobs.desktop, 'desktop job')['runs-on']).toBe('macos-14')
     expect(desktop).toContain('prepare:knowledge-template:release')
     expect(desktop).toContain('pnpm run jimu:test')
-    expect(desktop).toContain('@i-yolo/jimu-desktop build')
+    expect(desktop).toContain('@i-yolo/jimu-desktop pack:mac')
+    expect(desktop).toContain('@i-yolo/jimu-desktop test:packaged')
+    expect(desktop).toContain('--platform darwin --arch arm64')
+
+    const windows = JSON.stringify(record(jobs['windows-desktop'], 'Windows desktop job').steps)
+    expect(record(jobs['windows-desktop'], 'Windows desktop job')['runs-on']).toBe('windows-2025')
+    expect(windows).toContain('packages/shell/pwsh-sandbox/tests/acl.e2e.ts')
+    expect(windows).toContain('scripts/build-windows.mjs --version 0.1.99')
+    expect(windows).toContain('test-windows-installer.ps1')
+    expect(windows).toContain('-InstallRoot')
+    expect(windows).toContain('ExpectedSignature NotSigned')
+    expect(windows).toContain('--platform win32 --arch x64')
   })
 
   it('keeps the real API suite manual and opt-in nightly', () => {
@@ -51,17 +63,39 @@ describe('JiMu GitHub workflows', () => {
     const workflow = loadYaml('.github/workflows/jimu-release.yml')
     const events = record(workflow.on, 'release workflow events')
     const gates = job(workflow, 'gates')
-    const release = job(workflow, 'release')
+    const verifySource = job(workflow, 'verify-source')
+    const macos = job(workflow, 'macos')
+    const windows = job(workflow, 'windows')
+    const publish = job(workflow, 'publish')
 
     expect(Object.keys(events)).toEqual(['workflow_dispatch'])
     expect(gates.uses).toBe('./.github/workflows/jimu.yml')
-    expect(release.if).toBe("github.ref == 'refs/heads/main'")
-    expect(record(release.env, 'release environment').GH_TOKEN).toBeUndefined()
-    const steps = JSON.stringify(release.steps)
-    expect(steps).toContain('pnpm run build:lib')
-    expect(steps).toContain('jimu-release-audit.mjs')
-    expect(steps).toContain('test:packaged')
-    expect(steps).toContain('gh release create')
+    expect(gates.needs).toBe('verify-source')
+    const verification = JSON.stringify(verifySource.steps)
+    expect(verification).toContain('refs/heads/main')
+    expect(verification).toContain('origin/main')
+    expect(verification).toContain('refs/tags/v$VERSION')
+
+    expect(macos.needs).toEqual(['verify-source', 'gates'])
+    const macSteps = JSON.stringify(macos.steps)
+    expect(macSteps).toContain('dist:mac')
+    expect(macSteps).toContain('test:packaged')
+    expect(macSteps).toContain('--platform darwin --arch arm64')
+
+    expect(windows.needs).toEqual(['verify-source', 'gates'])
+    expect(windows.environment).toBe('jimu-release')
+    const windowsEnvironment = record(windows.env, 'Windows release environment')
+    expect(windowsEnvironment.AZURE_TENANT_ID).toContain('secrets.AZURE_TENANT_ID')
+    expect(windowsEnvironment.AZURE_PUBLISHER_NAME).toContain('vars.AZURE_PUBLISHER_NAME')
+    const windowsSteps = JSON.stringify(windows.steps)
+    expect(windowsSteps).toContain('dist:win:signed')
+    expect(windowsSteps).toContain('scripts/build-windows.mjs --version 0.1.99')
+    expect(windowsSteps).toContain('ExpectedSignature Valid')
+    expect(windowsSteps).toContain('-InstallRoot')
+
+    expect(publish.needs).toEqual(['macos', 'windows'])
+    expect(record(publish.env, 'publish environment').GH_TOKEN).toBeUndefined()
+    expect(JSON.stringify(publish.steps)).toContain('gh release create')
   })
 
   it('lets electron-builder resolve the locked Electron distribution portably', () => {
@@ -76,6 +110,15 @@ describe('JiMu GitHub workflows', () => {
     expect(repository.url).toBe('https://github.com/i-YOLO/JiMu-Harness.git')
     expect(repository.directory).toBe('apps/jimu-desktop')
     expect(scripts['dist:mac']).toContain('--publish never')
+    expect(scripts['dist:win']).toContain('build-windows.mjs')
+    expect(scripts['dist:win:signed']).toContain('--signed')
+    expect(record(build.win, 'Windows build configuration').icon).toBe('build/JiMu.ico')
+    const nsis = record(build.nsis, 'Windows NSIS configuration')
+    expect(nsis.oneClick).toBe(false)
+    expect(nsis.perMachine).toBe(false)
+    expect(nsis.allowElevation).toBe(false)
+    expect(nsis.allowToChangeInstallationDirectory).toBe(true)
+    expect(nsis.include).toBe('build/installer.nsh')
   })
 
   it('pins every remote action used by active JiMu workflows', () => {

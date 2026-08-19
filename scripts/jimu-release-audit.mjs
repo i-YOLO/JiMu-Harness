@@ -11,10 +11,15 @@ function option(name) {
 }
 
 const requestedRoot = option("--root");
-if (!requestedRoot) throw new Error("Usage: node scripts/jimu-release-audit.mjs --root <mounted-app-or-resources> [--denylist <file>]");
+if (!requestedRoot) throw new Error("Usage: node scripts/jimu-release-audit.mjs --root <mounted-app-or-resources> [--platform darwin|win32 --arch arm64|x64] [--denylist <file>]");
 
 const root = await realpath(path.resolve(requestedRoot));
 const denylistPath = option("--denylist");
+const platform = option("--platform");
+const architecture = option("--arch");
+if ((platform && !architecture) || (!platform && architecture)) throw new Error("--platform and --arch must be supplied together");
+if (platform && platform !== "darwin" && platform !== "win32") throw new Error(`Unsupported audit platform: ${platform}`);
+if (architecture && architecture !== "arm64" && architecture !== "x64") throw new Error(`Unsupported audit architecture: ${architecture}`);
 const privateTerms = denylistPath
   ? (await readFile(path.resolve(denylistPath), "utf8")).split(/\r?\n/u).map(line => line.trim()).filter(line => line && !line.startsWith("#"))
   : [];
@@ -46,6 +51,19 @@ async function listFiles(directory, relative = "") {
 }
 
 const files = (await listFiles(root)).sort();
+if (platform && architecture) {
+  const expectedPrebuild = `${platform}-${architecture}`;
+  const expectedSuffix = `app/node_modules/node-pty/prebuilds/${expectedPrebuild}/pty.node`;
+  if (!files.some(file => file === expectedSuffix || file.endsWith(`/${expectedSuffix}`))) flag("node-pty-native", "<missing>");
+  for (const file of files) {
+    const marker = "/node_modules/node-pty/prebuilds/";
+    const normalized = `/${file}`;
+    const index = normalized.indexOf(marker);
+    if (index === -1) continue;
+    const packagedPlatform = normalized.slice(index + marker.length).split("/")[0];
+    if (packagedPlatform !== expectedPrebuild) flag("wrong-platform-native", file);
+  }
+}
 const knowledgeManifestSuffix = "jimu-knowledge-template/jimu-knowledge.json";
 const knowledgeManifests = files.filter(file => file === knowledgeManifestSuffix || file.endsWith(`/${knowledgeManifestSuffix}`));
 if (knowledgeManifests.length !== 1) {

@@ -13,7 +13,7 @@ import LlmRuntime from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionId, TurnEndReason } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { defineContentToolFixture, TOOL_ABORTED_BEFORE_DISPATCH } from '@deepseek-ai/dsh-tools'
-import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
+import AgentRegistry, { type Agent, type AgentCancelCause } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { MockAdapter, textResponse, toolCallResponse } from './mock-adapter.ts'
 
@@ -55,6 +55,18 @@ function userTexts(agent: Agent): string[] {
 }
 
 describe('Agent.cancel()', () => {
+  it('refuses maintenance while a normal turn owns the driver', async () => {
+    const adapter = new MockAdapter(['hang'])
+    const ctx = await harness(adapter)
+    const agent = ctx.agentLoop.create(SessionId('maintenance-during-turn'), { provider: 'mock', model: 'mock' })
+
+    send(agent, 'go')
+    await expect.poll(() => adapter.requests.length).toBe(1)
+    expect(() => agent.runMaintenance(async () => undefined)).toThrow(/already has active work/)
+    agent.cancel({ kind: 'user' })
+    await waitForIdle(ctx, agent)
+  })
+
   it('cancel() on an idle agent with nothing queued is a no-op; the next prompt runs (F2 leak guard)', async () => {
     const adapter = new MockAdapter([textResponse('reply')])
     const ctx = await harness(adapter)
@@ -744,6 +756,26 @@ describe('Agent.cancel()', () => {
     expect(turnEnd?.type === 'turn/end' && turnEnd.data.reason).toEqual({
       kind: 'aborted',
       reason: { kind: 'parent' },
+    })
+  })
+
+  it('persists a detached cancellation cause when AbortSignal consumers mutate the supplied object', async () => {
+    const adapter = new MockAdapter(['hang'])
+    const ctx = await harness(adapter)
+    const agent = ctx.agentLoop.create(SessionId('detached-cancel-cause'), { provider: 'mock', model: 'mock' })
+    const supplied: { kind: 'hook'; reason: string | undefined } = { kind: 'hook', reason: 'operator stop' }
+
+    send(agent, 'go')
+    await expect.poll(() => adapter.requests.length).toBe(1)
+    agent.cancel(supplied as AgentCancelCause)
+    supplied.reason = undefined
+    await waitForIdle(ctx, agent)
+
+    expect(adapter.requests[0]?.signal?.reason).toBe(supplied)
+    const turnEnd = agent.session.events.findLast(event => event.type === 'turn/end')
+    expect(turnEnd?.type === 'turn/end' && turnEnd.data.reason).toEqual({
+      kind: 'aborted',
+      reason: { kind: 'hook', reason: 'operator stop' },
     })
   })
 

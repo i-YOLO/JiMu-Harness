@@ -95,7 +95,8 @@ function callPresentation(view, data) {
 
 function resultPresentation(view, data) {
   const presented = view?.for === "result" ? view.view : null;
-  const raw = contentText(data.message?.content ?? data.content, ["text", "reasoning"])
+  const resultBlocks = contentBlocks(data.message?.content ?? data.content).flatMap((block) => block.type === "tool-result" ? contentBlocks(block.content) : [block]);
+  const raw = contentText(resultBlocks, ["text", "reasoning"])
     || printable(data.result ?? data.output ?? data.error ?? "");
   if (!presented || typeof presented !== "object") return { output: raw, title: null, exitCode: null };
   const output = presented.card === "terminal"
@@ -269,7 +270,7 @@ export function historyMessages(entries) {
     if (event?.type === "tool/result") {
       const failed = Boolean(data.isError || data.error);
       const result = resultPresentation(view, data);
-      const callId = String(data.callId ?? "");
+      const callId = String(data.callId ?? data.message?.source?.callId ?? "");
       const index = tools.get(callId);
       if (index !== undefined) {
         messages[index] = {

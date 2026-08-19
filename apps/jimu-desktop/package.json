@@ -1,7 +1,7 @@
 {
   "name": "@i-yolo/jimu-desktop",
-  "description": "JiMu macOS desktop application over the DeepSeek Harness host",
-  "version": "0.1.1",
+  "description": "JiMu desktop application over the DeepSeek Harness host",
+  "version": "0.2.0",
   "private": true,
   "repository": {
     "type": "git",
@@ -13,16 +13,21 @@
   "scripts": {
     "build": "pnpm run build:renderer && pnpm run build:main",
     "prepare:knowledge-template": "node scripts/prepare-knowledge-template.mjs",
-    "prepare:knowledge-template:release": "JIMU_KNOWLEDGE_RELEASE_MODE=1 node scripts/prepare-knowledge-template.mjs",
+    "prepare:knowledge-template:release": "node scripts/prepare-knowledge-template.mjs --release",
     "build:renderer": "vite build",
     "build:main": "tsc --noEmit && tsdown",
     "dev": "pnpm run prepare:knowledge-template && pnpm run build && electron .",
+    "dev:isolated": "pnpm run prepare:knowledge-template && pnpm run build && node scripts/launch-isolated-dev.mjs",
     "start": "electron .",
     "pack:mac": "pnpm run prepare:knowledge-template:release && pnpm run build && electron-builder --mac dir --arm64",
     "dist:mac": "pnpm run prepare:knowledge-template:release && pnpm run build && electron-builder --mac dmg --arm64 --publish never",
-    "test": "vitest run tests/plugin-manager.spec.ts tests/knowledge-setup.spec.ts tests/knowledge-installer.spec.ts",
+    "pack:win": "pnpm run prepare:knowledge-template:release && pnpm run build && node scripts/build-windows.mjs --dir",
+    "dist:win": "pnpm run prepare:knowledge-template:release && pnpm run build && node scripts/build-windows.mjs",
+    "dist:win:signed": "pnpm run prepare:knowledge-template:release && pnpm run build && node scripts/build-windows.mjs --signed",
+    "test": "vitest run tests/agent-composer-action.spec.ts tests/plugin-manager.spec.ts tests/plugin-market.spec.ts tests/knowledge-setup.spec.ts tests/knowledge-installer.spec.ts",
     "test:e2e": "node --test --test-concurrency=1 tests/*.e2e.test.mjs",
     "test:packaged": "node scripts/smoke-packaged.mjs",
+    "test:packaged:win": "node scripts/smoke-packaged.mjs",
     "test:security": "node --test tests/security.test.mjs"
   },
   "dependencies": {
@@ -40,6 +45,7 @@
     "@deepseek-ai/dsh-output-retention": "workspace:^",
     "@deepseek-ai/dsh-sandbox": "workspace:^",
     "@deepseek-ai/dsh-scope": "workspace:^",
+    "@deepseek-ai/dsh-session": "workspace:^",
     "@deepseek-ai/dsh-session-telemetry": "workspace:^",
     "@deepseek-ai/dsh-session-title-llm": "workspace:^",
     "@deepseek-ai/dsh-shell": "workspace:^",
@@ -47,12 +53,16 @@
     "@deepseek-ai/dsh-subagent-in-process-driver": "workspace:^",
     "@deepseek-ai/dsh-subprocess": "workspace:^",
     "@deepseek-ai/dsh-timeout": "workspace:^",
-    "@deepseek-ai/dsh-workflow": "workspace:^"
+    "@deepseek-ai/dsh-tools": "workspace:^",
+    "@deepseek-ai/dsh-workflow": "workspace:^",
+    "pnpm": "11.7.0",
+    "semver": "^7.7.3"
   },
   "devDependencies": {
     "@types/node": "^22.20.0",
     "@types/react": "~18.3.1",
     "@types/react-dom": "~18.3.0",
+    "@types/semver": "^7.7.1",
     "@vitejs/plugin-react": "^4.7.0",
     "electron": "43.4.0",
     "electron-builder": "26.15.7",
@@ -67,7 +77,6 @@
   "build": {
     "appId": "com.iyolo.jimu",
     "productName": "JiMu",
-    "artifactName": "JiMu-${version}-macOS-arm64.${ext}",
     "asar": false,
     "directories": {
       "output": "release"
@@ -128,6 +137,7 @@
       }
     ],
     "mac": {
+      "artifactName": "JiMu-${version}-macOS-arm64.${ext}",
       "category": "public.app-category.productivity",
       "icon": "build/JiMu.icns",
       "identity": "-",
@@ -140,6 +150,31 @@
           ]
         }
       ]
+    },
+    "win": {
+      "artifactName": "JiMu-${version}-Windows-${arch}-Setup.${ext}",
+      "icon": "build/JiMu.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": false,
+      "allowToChangeInstallationDirectory": true,
+      "include": "build/installer.nsh",
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "shortcutName": "JiMu",
+      "uninstallDisplayName": "JiMu",
+      "deleteAppDataOnUninstall": false,
+      "runAfterFinish": true
     },
     "dmg": {
       "title": "JiMu ${version}",

@@ -436,6 +436,12 @@ function normalizeTarget(value) {
   }
 }
 
+function isExternalAbsolutePath(value) {
+  return /^[A-Za-z]:/.test(value)
+    || /^(?:\\\\|\/\/)/.test(value)
+    || /^\/(?:Users|Volumes|private|tmp|Applications|System|Library|opt|etc|var|usr|bin|sbin|dev)(?:\/|$)/i.test(value);
+}
+
 function withoutMarkdownExtension(value) {
   return value.toLocaleLowerCase("zh-CN").replace(/\.md$/i, "");
 }
@@ -1833,7 +1839,7 @@ export class KnowledgeIndexService {
         ? { kind: "anchor", href, sourcePath: fromPath, stableId: current.stableId, anchor: slugify(anchor, anchor) }
         : { kind: "missing", href, sourcePath: fromPath, reason: "anchor-not-found", anchor };
     }
-    if (!wiki && /^\/(?:Users|Volumes|private|tmp|Applications|System|Library|opt|etc|var|usr|bin|sbin|dev)(?:\/|$)/i.test(rawPath)) {
+    if (!wiki && isExternalAbsolutePath(rawPath)) {
       return { kind: "blocked", href, reason: "absolute-path-outside-root" };
     }
     let relativeTarget;
