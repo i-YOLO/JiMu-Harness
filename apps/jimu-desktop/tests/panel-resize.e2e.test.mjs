@@ -10,16 +10,22 @@ import { createKnowledgeFixture } from "./knowledge-fixture.mjs";
 
 const desktopRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const screenshotRoot = path.join(desktopRoot, "artifacts", "screenshots");
-async function dragHorizontally(page, locator, delta) {
-  const box = await locator.boundingBox();
-  assert.ok(box, "Resize separator must be visible");
-  const x = box.x + (box.width / 2);
-  const y = box.y + Math.min(420, box.height / 2);
-  await page.mouse.move(x, y);
-  await page.mouse.down();
-  await page.mouse.move(x + delta, y, { steps: 8 });
-  await page.mouse.up();
-  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+async function dragHorizontally(page, locator, delta, expectedSizeDelta = delta) {
+  const initial = Number(await locator.getAttribute("aria-valuenow"));
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const box = await locator.boundingBox();
+    assert.ok(box, "Resize separator must be visible");
+    const x = box.x + (box.width / 2);
+    const y = box.y + Math.min(420, box.height / 2);
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x + delta, y, { steps: 8 });
+    await page.mouse.up();
+    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    const change = Number(await locator.getAttribute("aria-valuenow")) - initial;
+    if (Math.sign(change) === Math.sign(expectedSizeDelta) && Math.abs(change) >= Math.abs(expectedSizeDelta) - 2) return;
+  }
+  throw new Error(`Resize separator did not move ${expectedSizeDelta}px after three pointer drags`);
 }
 
 async function panelWidths(page) {
@@ -64,6 +70,14 @@ test("JiMu Agent panel separators resize, persist, reset and protect the convers
   await waitForHarnessReady(page);
   await page.getByRole("button", { name: /01 AGENT 执行现场/ }).click();
   await page.getByText("项目与会话", { exact: true }).waitFor();
+  await Promise.all([
+    ".agent-workspace",
+    ".conversation-preview",
+    ".agent-empty-state",
+    ".message-stream",
+    ".conversation-flow",
+    ".conversation-stage",
+  ].map((selector) => page.locator(selector).waitFor({ state: "visible" })));
 
   const appSeparator = page.getByRole("separator", { name: "调整主导航宽度" });
   const projectSeparator = page.getByRole("separator", { name: "调整项目与会话面板宽度" });
@@ -95,7 +109,7 @@ test("JiMu Agent panel separators resize, persist, reset and protect the convers
 
   await dragHorizontally(page, appSeparator, 48);
   await dragHorizontally(page, projectSeparator, 40);
-  await dragHorizontally(page, contextSeparator, -32);
+  await dragHorizontally(page, contextSeparator, -32, 32);
   const resized = await panelWidths(page);
   assert.ok(resized.appSidebar >= initial.appSidebar + 46);
   assert.ok(resized.projectBrowser >= initial.projectBrowser + 38);
