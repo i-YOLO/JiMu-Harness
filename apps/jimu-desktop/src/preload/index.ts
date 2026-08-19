@@ -95,10 +95,23 @@ const bridge = {
     snapshot: () => ipcRenderer.invoke('jimu:plugins:snapshot'),
     applyToggles: (request: unknown) => ipcRenderer.invoke('jimu:plugins:apply-toggles', request),
     restart: () => ipcRenderer.invoke('jimu:plugins:restart'),
+    forceRestart: () => ipcRenderer.invoke('jimu:plugins:force-restart'),
+    searchCatalog: (request: unknown) => ipcRenderer.invoke('jimu:plugins:search-catalog', request),
+    inspect: (request: unknown) => ipcRenderer.invoke('jimu:plugins:inspect', request),
+    install: (request: unknown) => ipcRenderer.invoke('jimu:plugins:install', request),
+    cancelOperation: (request: unknown) => ipcRenderer.invoke('jimu:plugins:cancel-operation', request),
+    setEnabled: (request: unknown) => ipcRenderer.invoke('jimu:plugins:set-enabled', request),
+    update: (request: unknown) => ipcRenderer.invoke('jimu:plugins:update', request),
+    uninstall: (request: unknown) => ipcRenderer.invoke('jimu:plugins:uninstall', request),
     subscribe(listener: ChangeListener) {
       const wrapped = (_event: Electron.IpcRendererEvent, payload: unknown) => { listener(payload) }
       ipcRenderer.on('jimu:plugins:changed', wrapped)
       return () => ipcRenderer.removeListener('jimu:plugins:changed', wrapped)
+    },
+    subscribeOperation(listener: ChangeListener) {
+      const wrapped = (_event: Electron.IpcRendererEvent, payload: unknown) => { listener(payload) }
+      ipcRenderer.on('jimu:plugins:operation', wrapped)
+      return () => ipcRenderer.removeListener('jimu:plugins:operation', wrapped)
     },
   },
   project: {

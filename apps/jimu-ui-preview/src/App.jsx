@@ -38,7 +38,6 @@ import {
   LockSimple,
   MagnifyingGlass,
   MagicWand,
-  PaperPlaneRight,
   Palette,
   PencilSimple,
   PlayCircle,
@@ -56,6 +55,8 @@ import {
   X,
 } from "@phosphor-icons/react";
 import { describeHarnessError, groupSkillCatalog, historyMessages, summarizeUsage } from "./agent-transcript.js";
+import { AgentComposerAction } from "./agent-composer-action.jsx";
+import { composerActionState, updateProjectSession, updateSessionById } from "./agent-session-state.js";
 import { FactoryScreen } from "./factory-screen.jsx";
 import { PluginSettingsPanel } from "./plugin-settings.jsx";
 import { OnboardingScreen } from "./onboarding-screen.jsx";
@@ -2587,7 +2588,41 @@ function MentionPanel({ kind, query, setQuery, candidates, dir, selectedIndex, o
   );
 }
 
-function AgentPipelineRow({ message, sessionId, index }) {
+function PluginProposalPipelineRow({ message, rowKey, sessionRunning }) {
+  const [allowed, setAllowed] = useState([]);
+  const [phase, setPhase] = useState("ready");
+  const [error, setError] = useState(null);
+  let proposal;
+  try { proposal = JSON.parse(message.output ?? "{}"); } catch { proposal = null; }
+  if (!proposal?.proposalId) return null;
+  const builds = Array.isArray(proposal.buildPackages) ? proposal.buildPackages : [];
+
+  async function install(stopRunning = false) {
+    setPhase("installing"); setError(null);
+    try {
+      await globalThis.window.jimu.plugins.install({ proposalId: proposal.proposalId, allowedBuildPackages: allowed, stopRunning });
+      setPhase("installed");
+    } catch (cause) {
+      const text = cause instanceof Error ? cause.message : String(cause);
+      if (!stopRunning && text.includes("Agent 任务正在运行") && globalThis.confirm("停止当前任务并继续安装插件吗？")) {
+        setPhase("ready"); await install(true); return;
+      }
+      setError(text); setPhase("ready");
+    }
+  }
+
+  return (
+    <section className="pipeline-plugin-proposal" key={rowKey}>
+      <header><PuzzlePiece size={20} weight="duotone" /><span><strong>插件安装提案 · {proposal.packageName}</strong><small>{proposal.version} · {proposal.compatibility}</small></span></header>
+      <dl><div><dt>来源</dt><dd>{proposal.resolvedSource}</dd></div><div><dt>完整性</dt><dd>{proposal.integrityOrCommit}</dd></div></dl>
+      {builds.length > 0 && <div className="pipeline-plugin-builds"><strong>需要授权安装脚本</strong>{builds.map((name) => <label key={name}><input type="checkbox" checked={allowed.includes(name)} onChange={(event) => setAllowed((current) => event.target.checked ? [...current, name] : current.filter((item) => item !== name))} />{name}</label>)}</div>}
+      {error && <p className="pipeline-plugin-error">{error}</p>}
+      <footer><span>插件代码在 Agent 沙箱之外运行，请先核对来源。</span><button type="button" disabled={sessionRunning || phase !== "ready" || allowed.length !== builds.length} onClick={() => { void install(); }}>{phase === "installed" ? "已安装" : phase === "installing" ? "安装中…" : sessionRunning ? "等待任务结束" : "确认安装"}</button></footer>
+    </section>
+  );
+}
+
+function AgentPipelineRow({ message, sessionId, index, sessionRunning }) {
   const key = `${sessionId}-${message.role}-${message.seq ?? message.callId ?? index}`;
   if (message.role === "reasoning") {
     return (
@@ -2603,6 +2638,9 @@ function AgentPipelineRow({ message, sessionId, index }) {
     );
   }
   if (message.role === "tool") {
+    if (message.name === "jimu_plugin_prepare_install" && message.state === "complete") {
+      return <PluginProposalPipelineRow message={message} rowKey={key} sessionRunning={sessionRunning} />;
+    }
     const state = message.state ?? "complete";
     return (
       <details className="pipeline-row tool-row" data-state={state} key={key}>
@@ -2743,7 +2781,6 @@ function AgentScreen({ onOpenSettings, openSessionRequest, defaultProjectPath })
   const [importPath, setImportPath] = useState("");
   const [harnessPhase, setHarnessPhase] = useState(desktop ? "booting" : "preview");
   const [harnessError, setHarnessError] = useState(null);
-  const [sending, setSending] = useState(false);
   const [projectMenuId, setProjectMenuId] = useState("");
   const [sessionMenuId, setSessionMenuId] = useState("");
   const [renameTarget, setRenameTarget] = useState(null);
@@ -2769,13 +2806,22 @@ function AgentScreen({ onOpenSettings, openSessionRequest, defaultProjectPath })
   const activeSessionRef = useRef(activeSessionId);
   const messageStreamRef = useRef(null);
   const stickToBottomRef = useRef(true);
+  const pendingCancelRef = useRef(new Set());
+  const cancelIssuedRef = useRef(new Set());
+  const cancelTimersRef = useRef(new Map());
 
   useEffect(() => { projectsRef.current = projects; }, [projects]);
   useEffect(() => { activeSessionRef.current = activeSessionId; }, [activeSessionId]);
+  useEffect(() => () => {
+    for (const timer of cancelTimersRef.current.values()) clearTimeout(timer);
+    cancelTimersRef.current.clear();
+  }, []);
 
   const activeProject = projects.find((project) => project.id === activeProjectId) ?? projects[0];
   const activeSession = activeProject?.sessions.find((session) => session.id === activeSessionId)
     ?? activeProject?.sessions[0];
+  const composerAction = composerActionState(activeSession, draft);
+  const { running, submitting, cancelling } = composerAction;
   const activePreset = AGENT_PRESETS.find((preset) => preset.id === activeSession?.preset) ?? AGENT_PRESETS[0];
   const ActivePresetIcon = activePreset.icon;
   const activeModel = MODEL_OPTIONS.find((model) => model.id === activeSession?.model) ?? MODEL_OPTIONS[0];
@@ -2785,7 +2831,7 @@ function AgentScreen({ onOpenSettings, openSessionRequest, defaultProjectPath })
   useEffect(() => {
     const el = messageStreamRef.current;
     if (el && stickToBottomRef.current) el.scrollTop = el.scrollHeight;
-  }, [activeSession?.messages, sending]);
+  }, [activeSession?.messages, composerAction.pending]);
 
   const fileRefs = useMemo(
     () => [...draft.matchAll(/@([^\s@$]+)/g)].map((match) => ({ raw: match[0], text: match[1] })),
@@ -2813,10 +2859,42 @@ function AgentScreen({ onOpenSettings, openSessionRequest, defaultProjectPath })
   }, [projects, query, sessionMatches]);
 
   const patchSession = useCallback((projectId, sessionId, patch) => {
-    setProjects((items) => items.map((project) => project.id !== projectId
-      ? project
-      : { ...project, sessions: project.sessions.map((session) => session.id === sessionId ? { ...session, ...patch } : session) }));
+    setProjects((items) => updateProjectSession(items, projectId, sessionId, patch));
   }, []);
+
+  const patchSessionById = useCallback((sessionId, patch) => {
+    setProjects((items) => updateSessionById(items, sessionId, patch));
+  }, []);
+
+  const clearCancelState = useCallback((sessionId) => {
+    const timer = cancelTimersRef.current.get(sessionId);
+    if (timer !== undefined) clearTimeout(timer);
+    cancelTimersRef.current.delete(sessionId);
+    pendingCancelRef.current.delete(sessionId);
+    cancelIssuedRef.current.delete(sessionId);
+    patchSessionById(sessionId, { submitting: false, cancelling: false, cancelTimedOut: false });
+  }, [patchSessionById]);
+
+  const requestSessionCancel = useCallback(async (sessionId) => {
+    if (!desktop || cancelIssuedRef.current.has(sessionId)) return;
+    cancelIssuedRef.current.add(sessionId);
+    patchSessionById(sessionId, { cancelling: true, cancelTimedOut: false });
+    const previousTimer = cancelTimersRef.current.get(sessionId);
+    if (previousTimer !== undefined) clearTimeout(previousTimer);
+    cancelTimersRef.current.set(sessionId, setTimeout(() => {
+      patchSessionById(sessionId, { cancelTimedOut: true });
+    }, 10_000));
+    try {
+      await harnessApi.call("session.cancel", { sessionId });
+    } catch (error) {
+      const timer = cancelTimersRef.current.get(sessionId);
+      if (timer !== undefined) clearTimeout(timer);
+      cancelTimersRef.current.delete(sessionId);
+      cancelIssuedRef.current.delete(sessionId);
+      patchSessionById(sessionId, { cancelling: false, cancelTimedOut: false });
+      setHarnessError(`停止失败：${error instanceof Error ? error.message : String(error)}`);
+    }
+  }, [desktop, patchSessionById]);
 
   const refreshHarness = useCallback(async (preferredSessionId) => {
     const [workspaceState, sessionState] = await Promise.all([
@@ -2841,6 +2919,9 @@ function AgentScreen({ onOpenSettings, openSessionRequest, defaultProjectPath })
         skills: previous?.skills ?? [],
         blank: summary.blank,
         running: summary.running,
+        submitting: summary.running ? false : previous?.submitting ?? false,
+        cancelling: summary.running ? previous?.cancelling ?? false : false,
+        cancelTimedOut: summary.running ? previous?.cancelTimedOut ?? false : false,
       };
     };
     const nextProjects = workspaceState.items.map((workspace) => ({
@@ -2953,7 +3034,6 @@ function AgentScreen({ onOpenSettings, openSessionRequest, defaultProjectPath })
         setHarnessError(status.error ?? "Harness 启动失败");
       } else if (status.phase === "restarting") {
         setHarnessError(null);
-        setSending(false);
       }
     });
   }, [desktop, refreshHarness]);
@@ -3008,7 +3088,11 @@ function AgentScreen({ onOpenSettings, openSessionRequest, defaultProjectPath })
         setPendingInteractions((current) => current.filter((item) => item.rpcId !== payload.questionRpcId));
       }
       if (payload.type === "host/agent-error") setHarnessError(payload.message);
-      if (payload.type === "host/session-status" && payload.sessionId === activeSessionRef.current && payload.running === false) setSending(false);
+      if (payload.type === "host/session-status" && typeof payload.sessionId === "string" && typeof payload.running === "boolean") {
+        patchSessionById(payload.sessionId, { running: payload.running, ...(payload.running ? { submitting: false } : {}) });
+        if (!payload.running) clearCancelState(payload.sessionId);
+        else if (pendingCancelRef.current.has(payload.sessionId)) void requestSessionCancel(payload.sessionId);
+      }
       if (payload.type === "session/event" && payload.sessionId === activeSessionRef.current) {
         const event = payload.event;
         const data = event?.data ?? {};
@@ -3045,7 +3129,7 @@ function AgentScreen({ onOpenSettings, openSessionRequest, defaultProjectPath })
       }
     });
     return () => { clearTimeout(refreshTimer); unsubscribe(); };
-  }, [desktop, harnessPhase, loadSession, refreshHarness]);
+  }, [clearCancelState, desktop, harnessPhase, loadSession, patchSessionById, refreshHarness, requestSessionCancel]);
 
   function updateSession(patch) {
     if (!activeProject || !activeSession) return;
@@ -3280,11 +3364,22 @@ function AgentScreen({ onOpenSettings, openSessionRequest, defaultProjectPath })
   }
 
   async function cancelRun() {
-    if (!desktop || !activeSession) return;
+    if (!desktop || !activeSession || cancelling || (!running && !submitting)) return;
+    pendingCancelRef.current.add(activeSession.id);
+    patchSessionById(activeSession.id, { cancelling: true, cancelTimedOut: false });
+    if (running) await requestSessionCancel(activeSession.id);
+  }
+
+  async function forceRestartAfterCancel() {
+    if (!desktop || !activeSession?.cancelTimedOut) return;
+    if (!globalThis.confirm("强制重启 Harness 会终止所有正在运行的 Agent 任务，是否继续？")) return;
     try {
-      await harnessApi.call("session.cancel", { sessionId: activeSession.id });
+      setHarnessPhase("restarting");
+      await globalThis.window.jimu.plugins.forceRestart();
+      await refreshHarness(activeSession.id);
     } catch (error) {
-      setHarnessError(error instanceof Error ? error.message : String(error));
+      setHarnessPhase("ready");
+      setHarnessError(`Harness 重启失败：${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -3329,7 +3424,7 @@ function AgentScreen({ onOpenSettings, openSessionRequest, defaultProjectPath })
 
   async function applyPermission(preset) {
     if (preset === permissionPreset) return;
-    if (!activeSession || sending) return;
+    if (!activeSession || composerAction.pending) return;
     if (desktop) {
       try {
         if (activeProject && !activeProject.id.startsWith("ungrouped:")) {
@@ -3491,29 +3586,51 @@ function AgentScreen({ onOpenSettings, openSessionRequest, defaultProjectPath })
 
   async function sendMessage() {
     const text = draft.trim();
-    if (!text || !activeSession || sending) return;
+    if (!text || !activeSession || composerAction.pending) return;
+    const projectId = activeProject?.id;
+    const sessionId = activeSession.id;
+    if (!projectId) return;
+    const previousMessages = activeSession.messages;
     // Sending a message is an explicit intent to watch the newest output:
     // resume the bottom-follow so the reply scrolls into view.
     stickToBottomRef.current = true;
     if (desktop) {
-      setSending(true);
       setHarnessError(null);
-      updateSession({ time: "刚刚", messages: [...activeSession.messages, { role: "user", text }], blank: false, running: true });
+      patchSession(projectId, sessionId, {
+        time: "刚刚",
+        messages: [...previousMessages, { role: "user", text }],
+        blank: false,
+        submitting: true,
+        cancelling: false,
+        cancelTimedOut: false,
+      });
       setDraft("");
       try {
         if (activeProject && !activeProject.id.startsWith("ungrouped:")) {
-          await harnessApi.call("session.create", { sessionId: activeSession.id, workspaceId: activeProject.id });
+          await harnessApi.call("session.create", { sessionId, workspaceId: activeProject.id });
+        }
+        if (pendingCancelRef.current.has(sessionId)) {
+          clearCancelState(sessionId);
+          patchSession(projectId, sessionId, { messages: previousMessages });
+          setDraft(text);
+          return;
         }
         await harnessApi.call("session.prompt", {
-          sessionId: activeSession.id,
+          sessionId,
           mode: "queue",
           content: [{ type: "text", text }],
           clientTimeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         });
-        await refreshHarness(activeSession.id);
+        patchSessionById(sessionId, { submitting: false });
+        const refreshed = await refreshHarness(sessionId);
+        const refreshedSession = refreshed.flatMap((project) => project.sessions).find((session) => session.id === sessionId);
+        if (pendingCancelRef.current.has(sessionId)) {
+          if (refreshedSession?.running) await requestSessionCancel(sessionId);
+          else clearCancelState(sessionId);
+        }
       } catch (error) {
         setHarnessError(error instanceof Error ? error.message : String(error));
-        setSending(false);
+        clearCancelState(sessionId);
       }
       return;
     }
@@ -3786,10 +3903,16 @@ function AgentScreen({ onOpenSettings, openSessionRequest, defaultProjectPath })
             <div className="agent-empty-state"><Sparkle size={34} weight="duotone" /><strong>这是一个空白会话</strong><p>先选择 Agent 模式与 DeepSeek V4 模型，再发送第一条任务。</p></div>
           )}
           {(activeSession?.messages ?? []).filter((message) => message.role !== "context").map((message, index) => (
-            <AgentPipelineRow message={message} sessionId={activeSession?.id} index={index} key={`${activeSession?.id}-${message.role}-${message.seq ?? message.callId ?? index}`} />
+            <AgentPipelineRow message={message} sessionId={activeSession?.id} index={index} sessionRunning={composerAction.pending} key={`${activeSession?.id}-${message.role}-${message.seq ?? message.callId ?? index}`} />
           ))}
-          {sending && <div className="message assistant pending"><span>JiMu</span><p><span className="index-loader" />Harness 正在执行任务…</p></div>}
+          {composerAction.pending && <div className="message assistant pending"><span>JiMu</span><p><span className="index-loader" />{cancelling ? "Harness 正在停止任务…" : running ? "Harness 正在执行任务…" : "Harness 正在提交任务…"}</p></div>}
         </div>
+        {activeSession?.cancelTimedOut && (
+          <section className="agent-cancel-timeout" role="alert">
+            <span><strong>停止耗时较长</strong><small>当前工具可能没有及时响应取消信号。你可以继续等待，或重启 Harness 终止所有任务。</small></span>
+            <button type="button" onClick={() => { void forceRestartAfterCancel(); }}>重启 Harness</button>
+          </section>
+        )}
         {pendingInteractions.filter((item) => item.sessionId === activeSession?.id).map((interaction) => (
           <section className="agent-interaction" key={interaction.key}>
             {interaction.type === "approval/requested" ? (
@@ -3977,9 +4100,11 @@ function AgentScreen({ onOpenSettings, openSessionRequest, defaultProjectPath })
 
               <span className="composer-project-context"><Folder size={14} weight="duotone" />{activeProject?.title}</span>
             </div>
-            <button className="composer-send" data-cancel={sending || undefined} type="button" onClick={() => { sending ? void cancelRun() : void sendMessage(); }} disabled={!activeSession || (!sending && !draft.trim())}>
-              {sending ? "停止" : "发送"} {sending ? <X size={16} weight="bold" /> : <PaperPlaneRight size={16} weight="fill" />}
-            </button>
+            <AgentComposerAction
+              action={composerAction}
+              onSend={() => { void sendMessage(); }}
+              onStop={() => { void cancelRun(); }}
+            />
           </div>
         </div>
         </div>

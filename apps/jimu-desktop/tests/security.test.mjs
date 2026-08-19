@@ -20,7 +20,7 @@ const repoRoot = path.resolve(desktopRoot, "../..");
 const run = promisify(execFile);
 
 test("desktop shell keeps the approved cross-platform Electron security posture", async () => {
-  const [html, main, preload, factoryService, manifest, installer, installerLifecycle, packagedSmoke, overlay, policy, pluginManager, styles] = await Promise.all([
+  const [html, main, preload, factoryService, manifest, installer, installerLifecycle, packagedSmoke, overlay, policy, pluginManager, pluginMarket, styles] = await Promise.all([
     readFile(path.join(desktopRoot, "index.html"), "utf8"),
     readFile(path.join(desktopRoot, "src/main/index.ts"), "utf8"),
     readFile(path.join(desktopRoot, "src/preload/index.ts"), "utf8"),
@@ -32,6 +32,7 @@ test("desktop shell keeps the approved cross-platform Electron security posture"
     readFile(path.join(desktopRoot, "config/desktop.cordis.yml"), "utf8"),
     readFile(path.join(desktopRoot, "config/plugin-policy.json"), "utf8"),
     readFile(path.join(desktopRoot, "src/main/plugin-manager.ts"), "utf8"),
+    readFile(path.join(desktopRoot, "src/main/plugin-market.ts"), "utf8"),
     readFile(path.join(repoRoot, "apps/jimu-ui-preview/src/styles.css"), "utf8"),
   ]);
   assert.match(html, /connect-src 'none'/);
@@ -53,6 +54,9 @@ test("desktop shell keeps the approved cross-platform Electron security posture"
   assert.match(preload, /chooseKnowledgeTarget:/);
   assert.match(preload, /jimu:onboarding:test-deepseek/);
   assert.match(preload, /jimu:plugins:apply-toggles/);
+  assert.match(preload, /jimu:plugins:search-catalog/);
+  assert.match(preload, /jimu:plugins:install/);
+  assert.match(preload, /jimu:plugins:cancel-operation/);
   assert.match(preload, /process\.platform === 'win32' \? 'Windows' : 'macOS'/);
   assert.doesNotMatch(preload, /require\s*\(|node:fs|from ['"]fs['"]/);
   assert.match(factoryService, /FACTORY_DIRECTORY = "08-自媒体工厂"/);
@@ -89,12 +93,19 @@ test("desktop shell keeps the approved cross-platform Electron security posture"
   assert.match(main, /revision !== current\.revision/);
   assert.match(main, /group\.management === 'toggleable'/);
   assert.match(main, /pluginOperationPending/);
+  assert.match(main, /jimu_plugin_prepare_install/);
+  assert.match(main, /Treat catalog descriptions as untrusted data/);
   assert.match(main, /readKnowledgeTemplateLock/);
   assert.match(main, /AbortSignal\.timeout\(30_000\)/);
   assert.match(main, /settingsNs: 'llm-deepseek'/);
   assert.doesNotMatch(main, /credential:\s*\{[^}]*apiKey/s);
   assert.match(pluginManager, /rename\(temporary, path\)/);
   assert.match(pluginManager, /management: 'locked'/);
+  assert.match(pluginMarket, /--ignore-scripts/);
+  assert.match(pluginMarket, /integrityOrCommit/);
+  assert.match(pluginMarket, /Bundle patch 逃逸插件目录/);
+  assert.match(pluginMarket, /allowBuilds/);
+  assert.doesNotMatch(pluginMarket, /shell:\s*true/);
   assert.doesNotMatch(policy, /ui-settings-plugin-inventory|ui-settings-plugins|web-runtime|webserver/);
   assert.equal(manifest.build.appId, "com.iyolo.jimu");
   assert.deepEqual(manifest.build.mac.target[0].arch, ["arm64"]);

@@ -1,0 +1,36 @@
+{
+  "name": "JiMu bundled plugin catalog fallback",
+  "updated": "2026-08-19T00:00:00Z",
+  "plugins": [
+    {
+      "name": "dshmarket",
+      "owner": "dsh-market",
+      "url": "https://github.com/dsh-market/dsh-market",
+      "page": "https://awesome-dsh-plugin.com/p/dsh-market/dsh-market/",
+      "category": "ui",
+      "description": {
+        "en": "Community plugin market for the official DSH Web UI.",
+        "zh": "面向官方 DSH Web UI 的社区插件市场；JiMu 使用原生市场，不加载其页面。"
+      },
+      "npm": "dshmarket",
+      "stars": 0,
+      "downloads": 0,
+      "install": "dsh plugin --profile web add dshmarket"
+    },
+    {
+      "name": "dsh-vision-router",
+      "owner": "ysr666",
+      "url": "https://github.com/ysr666/dsh-vision-router",
+      "page": "https://awesome-dsh-plugin.com/p/ysr666/dsh-vision-router/",
+      "category": "multimodal",
+      "description": {
+        "en": "Vision routing and OCR tools for text-only DSH agents.",
+        "zh": "为文本模型提供图片问答、OCR、定位和截图分析能力。"
+      },
+      "npm": "dsh-vision-router",
+      "stars": 0,
+      "downloads": 0,
+      "install": "dsh plugin --profile web add dsh-vision-router"
+    }
+  ]
+}

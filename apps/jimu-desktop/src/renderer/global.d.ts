@@ -55,7 +55,16 @@ declare global {
         snapshot(): Promise<unknown>
         applyToggles(request: unknown): Promise<unknown>
         restart(): Promise<unknown>
+        forceRestart(): Promise<unknown>
+        searchCatalog(request: unknown): Promise<unknown>
+        inspect(request: unknown): Promise<unknown>
+        install(request: unknown): Promise<unknown>
+        cancelOperation(request: unknown): Promise<unknown>
+        setEnabled(request: unknown): Promise<unknown>
+        update(request: unknown): Promise<unknown>
+        uninstall(request: unknown): Promise<unknown>
         subscribe(listener: (payload: unknown) => void): () => void
+        subscribeOperation(listener: (payload: unknown) => void): () => void
       }
       project: { listFiles(projectPath: string, dir?: string): Promise<unknown> }
       usage: { scanExternal(): Promise<unknown> }
