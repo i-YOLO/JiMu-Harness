@@ -2,55 +2,86 @@
 
 [中文](README.md) | English
 
-JiMu Harness is a local-first macOS and Windows desktop workspace built on the official [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) and Cordis plugin runtime. It adds a native Electron shell, a JiMu renderer, managed plugin controls, an embedded Harness lifecycle, and an optional Markdown knowledge protocol.
+A local-first desktop workspace built on [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) and the Cordis plugin runtime, with Agent conversations, plugin management, and Markdown knowledge integration for macOS and Windows.
 
-This repository preserves the complete upstream Git history and tags. DeepSeek Harness remains an upstream project authored by DeepSeek AI; JiMu-specific work is maintained as a downstream product layer.
+**Author and maintainer: JiMu** · [Official repository](https://github.com/i-YOLO/JiMu-Harness) · [Downloads](https://github.com/i-YOLO/JiMu-Harness/releases) · [Issues](https://github.com/i-YOLO/JiMu-Harness/issues) · [MIT License](LICENSE)
 
-## Privacy boundary
+## Overview
 
-The repository contains no user knowledge, projects, sessions, credentials, analytics, screenshots, or demo records. First launch selects optional modules, chooses or accepts the default Knowledge initialization location, installs the local knowledge base, and verifies a DeepSeek API key. JiMu does not scan the home directory.
+JiMu Harness provides a native Electron host, a JiMu interface, policy-controlled plugins, and lifecycle management for the embedded Harness. The companion [JiMu Knowledge](https://github.com/i-YOLO/JiMu-Knowledge) is a separately maintained blank Markdown template with knowledge indexing, a benchmark library, and media workflow directories.
 
-The empty companion template lives in [i-YOLO/JiMu-Knowledge](https://github.com/i-YOLO/JiMu-Knowledge). Git synchronization is intentionally delegated to the user's normal Git tooling; the app does not store repository credentials.
+JiMu independently maintains this downstream distribution of DeepSeek Harness. It is not an official DeepSeek product. The repository preserves upstream Git history, tags, and copyright notices; JiMu-specific features and upstream code are maintained separately.
 
-The default path installs the complete JiMu-Knowledge from a locked GitHub Release and automatically uses the same-version installer copy when offline. A native folder dialog can instead select a parent directory, where JiMu atomically creates `JiMu-Knowledge`. `07-对标博主库` and `08-自媒体工厂` may be disabled independently during first-run setup or later in Settings; disabling a module neither creates, scans, nor deletes its directory.
+## Quick start
 
-## Architecture
+1. Visit [Releases](https://github.com/i-YOLO/JiMu-Harness/releases/latest) and download the installer for your platform.
+2. Install and open JiMu, then choose whether to enable the benchmark library and self-media factory during first-run setup.
+3. Initialize a knowledge base with the default setup, choose a parent folder in which to create `JiMu-Knowledge`, or select an existing knowledge base.
+4. Configure and verify your own DeepSeek API key in the app before use.
 
-- `apps/jimu-desktop`: Electron main process, preload boundary, plugin policy, Harness lifecycle, native folder selection, and packaging.
-- `apps/jimu-ui-preview`: JiMu renderer, read-only knowledge index, and write-on-action media factory.
-- `apps/jimu-ui-preview/shared/knowledge-schema.mjs`: the single fixed source for the eight public knowledge categories.
-- `packages`, `apps/cli`, `vendor`, and `examples`: upstream DeepSeek Harness. Official examples remain source-only and are excluded from JiMu desktop installers.
+| Platform | Installer |
+| --- | --- |
+| macOS Apple Silicon (arm64) | `.dmg` |
+| Windows x64 | `-Setup.exe` |
 
-See [JiMu architecture](docs/jimu/architecture.md), [privacy and release boundaries](docs/jimu/privacy.md), and [upstream synchronization](docs/jimu/upstream-sync.md).
+Installers do not require Node.js or pnpm. Model requests and online template downloads require network access; local-first does not mean fully offline.
+
+## Privacy and knowledge storage
+
+The repository and installers contain no user-authored knowledge, project records, sessions, credentials, or demo data. The app does not scan the home directory. Users choose their knowledge location and manage Git synchronization with their own Git tools; the app does not store Git repository credentials.
+
+Default setup installs the complete blank template from a locked GitHub Release and uses the same-version bundled copy when offline. When a parent folder is selected, JiMu atomically creates `JiMu-Knowledge` inside it. Each optional module can be disabled independently; disabling a module does not create, scan, or delete its directory.
+
+See [privacy and release boundaries](docs/jimu/privacy.md).
+
+## Repository structure
+
+| Path | Responsibility |
+| --- | --- |
+| [apps/jimu-desktop/](apps/jimu-desktop/) | Electron main process, preload security boundary, plugin policy, Harness lifecycle, native folder selection, and packaging |
+| [apps/jimu-ui-preview/](apps/jimu-ui-preview/) | JiMu interface, read-only knowledge index, and a media factory that creates directories only on explicit write operations |
+| [knowledge-schema.mjs](apps/jimu-ui-preview/shared/knowledge-schema.mjs) | Shared configuration for the eight public knowledge categories |
+| [packages/](packages/), [apps/cli/](apps/cli/), [vendor/](vendor/), [examples/](examples/) | Upstream DeepSeek Harness implementation and dependencies; official examples are excluded from JiMu desktop installers |
+
+See [JiMu architecture](docs/jimu/architecture.md) for details.
 
 <a id="run"></a><a id="run-from-source"></a>
 
 ## Development
 
-Requirements: Node.js 22.19+ and pnpm 11.7.
+Requires Git, Node.js `^22.19.0 || >=24.0.0`, and pnpm `11.7.0` as pinned in [package.json](package.json). Use a native environment for the target desktop platform.
 
 ```sh
+git clone https://github.com/i-YOLO/JiMu-Harness.git
+cd JiMu-Harness
 pnpm install --frozen-lockfile
 pnpm run build:lib
-JIMU_KNOWLEDGE_TEMPLATE_DIR=/path/to/JiMu-Knowledge \
-  pnpm --filter @i-yolo/jimu-desktop prepare:knowledge-template
-pnpm --filter @i-yolo/jimu-desktop build
+pnpm --filter @i-yolo/jimu-desktop dev:isolated
 ```
 
-Run the browser renderer without local data:
+`dev:isolated` prepares the locked knowledge template, builds the desktop app, and launches an isolated development instance. It uses temporary app settings and a test knowledge base, removes them on exit, and must not be used to store personal content. Initial template preparation requires access to GitHub Releases.
+
+To preview only the browser interface:
 
 ```sh
 pnpm --filter @i-yolo/jimu-ui-preview dev
 ```
 
-Official release builds never accept an unlocked local template. They download the release named in `apps/jimu-desktop/config/knowledge-template-lock.json`, verify SHA-256 and the empty Schema 1 structure, then package it as an `extraResource`.
+Without a local data source, the browser preview shows empty states. It does not replace verification of Electron desktop features.
 
-Package macOS Apple Silicon on macOS and Windows x64 on a native Windows host:
+### Packaging
+
+Run the corresponding command on macOS Apple Silicon or native Windows x64:
 
 ```sh
+# macOS Apple Silicon
 pnpm --filter @i-yolo/jimu-desktop dist:mac
+
+# Windows x64
 pnpm --filter @i-yolo/jimu-desktop dist:win
 ```
+
+Release builds download the release specified in [knowledge-template-lock.json](apps/jimu-desktop/config/knowledge-template-lock.json), verify its SHA-256, manifest, and empty directory structure, and bundle it with the app. They reject unlocked local templates. Changes to the companion repository's README do not automatically replace a pinned release archive.
 
 ## Compatibility
 
@@ -58,12 +89,18 @@ pnpm --filter @i-yolo/jimu-desktop dist:win
 | --- | --- | --- |
 | 0.1.x–0.2.x | 1 | 1.0.x |
 
-Roots without a manifest but containing every core directory are opened as read-only-compatible `legacy-schema-1`; each locally enabled optional module must still be present. `assets` may be a symlink when its resolved target remains a directory inside the knowledge root; escaping, dangling, and non-directory links are rejected, while content-category paths must remain real directories. Invalid or future manifests are rejected without replacing the active root.
+Knowledge roots without a manifest but containing the core directories load in `legacy-schema-1` compatibility mode and are not modified merely by being opened. Enabled optional modules must still be present. Invalid or future manifests are rejected without replacing the active knowledge root.
 
-## Upstream DeepSeek Harness
+Content-category paths must be real directories. `assets` may be a symlink if it resolves to a directory inside the knowledge root; external, dangling, or non-directory targets are rejected.
 
-To use the original DeepSeek Harness Web UI or CLI, consult the [upstream documentation](https://github.com/deepseek-ai/deepseek-harness). JiMu keeps `upstream` fetch-only and does not replace upstream authorship, notices, or the MIT license.
+## Support and upstream
 
-## License and marks
+Report JiMu installation, interface, and knowledge integration problems in [this repository's Issues](https://github.com/i-YOLO/JiMu-Harness/issues). Include the operating system, app version, reproduction steps, and sanitized logs. Do not upload API keys, private conversations, or personal knowledge bases.
 
-Code is licensed under [MIT](LICENSE), with upstream copyright retained. JiMu names, logos, and character artwork are excluded from the MIT trademark grant; see [TRADEMARKS.md](TRADEMARKS.md). Third-party notices are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+For the original DeepSeek Harness Web UI or CLI, see the [upstream documentation](https://github.com/deepseek-ai/deepseek-harness). The maintainer's two-remote setup is documented in [upstream synchronization](docs/jimu/upstream-sync.md); a normal clone does not automatically create or disable an `upstream` remote. Upstream contribution policy is retained in [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## License and brand
+
+Project code is licensed under the [MIT License](LICENSE). JiMu maintains the JiMu-specific portions; DeepSeek's upstream copyright and other third-party notices are retained. Third-party components retain their respective licenses; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+The MIT License does not grant rights to use the JiMu name, logo, or character artwork as a trademark, product identity, or endorsement; see [TRADEMARKS.md](TRADEMARKS.md). This notice adds no restrictions to MIT-licensed code and does not alter third-party rights.
