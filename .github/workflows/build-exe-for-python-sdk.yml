@@ -66,7 +66,7 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       repository-version: ${{ steps.version.outputs.repository-version }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Resolve repository version
         id: version
@@ -120,9 +120,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v6.3.0
+      - uses: actions/setup-python@v7.0.0
         with:
           python-version: '3.10'
 
@@ -152,18 +152,18 @@ jobs:
       matrix:
         include: ${{ fromJSON(needs.plan.outputs.matrix) }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v5
 
       # setup-node's built-in pnpm store cache keys on platform AND arch, so
       # the Linux architectures sharing runner.os stay on separate caches.
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: pnpm
 
-      - uses: actions/setup-python@v6.3.0
+      - uses: actions/setup-python@v7.0.0
         with:
           python-version: '3.10'
 
@@ -172,7 +172,7 @@ jobs:
 
       # Cache pkg's target Node binary; lockfile changes roll the
       # exact key while the restore prefix can seed its replacement.
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/.pkg-cache
           key: pkg-fetch-${{ matrix.target }}-${{ hashFiles('pnpm-lock.yaml') }}
