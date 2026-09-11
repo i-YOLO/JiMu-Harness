@@ -34,7 +34,7 @@
   "dependencies": {
     "@agentclientprotocol/sdk": "0.25.1",
     "@deepseek-ai/dsh-loader-smoke": "workspace:*",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.11"
   },
   "peerDependencies": {
     "@deepseek-ai/dsh-invariants": "workspace:^",
